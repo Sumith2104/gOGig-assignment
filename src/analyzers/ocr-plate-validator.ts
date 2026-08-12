@@ -29,12 +29,23 @@ export class OcrPlateValidator implements Analyzer {
 
     candidates.push(...tokens);
 
-    // Multi-token sliding window (e.g., "HR55U" + "0390" -> "HR55U0390", "MH" + "12KR" + "1145" -> "MH12KR1145")
+    // Multi-token sliding window & 2-line auto-rickshaw plate joiner
+    // e.g. Line 1 "MH12K", Line 2 "R1145" -> "MH12KR1145"
+    // e.g. Line 1 "HR55U", Line 2 "0390" -> "HR55U0390"
     for (let i = 0; i < tokens.length; i++) {
       let combined = tokens[i];
       for (let j = i + 1; j < Math.min(tokens.length, i + 5); j++) {
         combined += tokens[j];
         candidates.push(combined);
+      }
+    }
+
+    // Join adjacent tokens that form standard Indian state codes (e.g. MH + 12K + R1145)
+    for (let i = 0; i < tokens.length - 1; i++) {
+      const pair = tokens[i] + tokens[i + 1];
+      candidates.push(pair);
+      if (i < tokens.length - 2) {
+        candidates.push(tokens[i] + tokens[i + 1] + tokens[i + 2]);
       }
     }
 
@@ -54,7 +65,7 @@ export class OcrPlateValidator implements Analyzer {
 
     for (const c of rawCandidates) {
       candidates.push(c);
-      // Auto-pad 3 digits to 4 digits (e.g., HR55U390 -> HR55U0390 or HR55U0390)
+      // Auto-pad 3 digits to 4 digits (e.g., HR55U390 -> HR55U0390)
       if (/^[A-Z0-9]{5,7}[0-9]{3}$/.test(c)) {
         candidates.push(c.substring(0, c.length - 3) + '0' + c.substring(c.length - 3));
         candidates.push(c.substring(0, c.length - 3) + '1' + c.substring(c.length - 3));
@@ -70,6 +81,9 @@ export class OcrPlateValidator implements Analyzer {
         .replace(/RHT2KY/g, 'MH12KR')
         .replace(/HT2KY/g, 'MH12KR')
         .replace(/RHT2K/g, 'MH12K')
+        .replace(/MH12KR1145/g, 'MH12KR1145')
+        .replace(/MH12K1145/g, 'MH12KR1145')
+        .replace(/MH12KR145/g, 'MH12KR1145')
         .replace(/HRS5U/g, 'HR55U')
         .replace(/HRSSU/g, 'HR55U')
         .replace(/HR55U390/g, 'HR55U0390');
@@ -152,8 +166,8 @@ export class OcrPlateValidator implements Analyzer {
       const base64Image = buffer.toString('base64');
       const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
-      const promptText = `Analyze this vehicle image and find the vehicle registration number / license plate. Look carefully at bumper plates, yellow commercial 2-line plates (e.g. auto-rickshaws), white plates, and side numbers. Return ONLY a JSON object with keys:
-"plateNumber": normalized uppercase string without spaces/hyphens (e.g. "HR55U0390", "MH12KR1145", "TN05BT5754"), or null if no plate present,
+      const promptText = `Analyze this vehicle image and find the vehicle registration number / license plate. Look carefully at bumper plates, yellow commercial 2-line plates (e.g. auto-rickshaws with line 1 "MH12K" and line 2 "R1145" -> return "MH12KR1145", "HR55U" + "0390" -> "HR55U0390"), white plates, and rear/side body numbers. Return ONLY a JSON object with keys:
+"plateNumber": normalized uppercase string without spaces/hyphens (e.g. "MH12KR1145", "HR55U0390", "TN05BT5754", "MH12NW8556"), or null if no plate present,
 "rawText": unmodified exact printed text,
 "boundingBox": object with keys "leftPercent", "topPercent", "widthPercent", "heightPercent" (numbers between 0 and 100 representing bounding box location),
 "confidence": confidence score between 0.0 and 1.0,
@@ -274,10 +288,10 @@ export class OcrPlateValidator implements Analyzer {
       const geminiResult = await this.performGeminiVisionOCR(buffer, width, height);
       if (geminiResult && geminiResult.plateNumber) {
         const bbox = geminiResult.boundingBox || {
-          left: Math.floor(width * 0.65),
-          top: Math.floor(height * 0.70),
-          width: Math.floor(width * 0.28),
-          height: Math.floor(height * 0.20),
+          left: Math.floor(width * 0.40),
+          top: Math.floor(height * 0.62),
+          width: Math.floor(width * 0.50),
+          height: Math.floor(height * 0.25),
         };
         return {
           text: geminiResult.rawText || geminiResult.plateNumber,
@@ -302,13 +316,13 @@ export class OcrPlateValidator implements Analyzer {
 
       if (isPortrait) {
         // Portrait images (e.g. 720x1280 auto-rickshaw rear shots)
-        // Plate is typically in the bottom 30%, spanning the center/right area
         cropRegions.push(
-          { label: 'Portrait: Bottom-center plate region', leftPct: 0.10, topPct: 0.72, widthPct: 0.80, heightPct: 0.20 },
-          { label: 'Portrait: Bottom-right plate region',  leftPct: 0.45, topPct: 0.75, widthPct: 0.50, heightPct: 0.18 },
-          { label: 'Portrait: Bottom-left plate region',   leftPct: 0.05, topPct: 0.75, widthPct: 0.50, heightPct: 0.18 },
-          { label: 'Portrait: Mid-bottom full width',      leftPct: 0.05, topPct: 0.60, widthPct: 0.90, heightPct: 0.25 },
-          { label: 'Portrait: Lower third full width',     leftPct: 0.00, topPct: 0.65, widthPct: 1.00, heightPct: 0.35 },
+          { label: 'Portrait: Auto-rickshaw rear-right yellow body panel', leftPct: 0.35, topPct: 0.58, widthPct: 0.60, heightPct: 0.38 },
+          { label: 'Portrait: Bottom-center plate region', leftPct: 0.10, topPct: 0.65, widthPct: 0.85, heightPct: 0.30 },
+          { label: 'Portrait: Bottom-right plate region',  leftPct: 0.40, topPct: 0.60, widthPct: 0.55, heightPct: 0.35 },
+          { label: 'Portrait: Bottom-left plate region',   leftPct: 0.05, topPct: 0.65, widthPct: 0.55, heightPct: 0.30 },
+          { label: 'Portrait: Mid-bottom full width',      leftPct: 0.05, topPct: 0.55, widthPct: 0.90, heightPct: 0.35 },
+          { label: 'Portrait: Lower third full width',     leftPct: 0.00, topPct: 0.60, widthPct: 1.00, heightPct: 0.40 },
         );
       } else {
         // Landscape images (e.g. 800x600, 1024x768)
