@@ -11,7 +11,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - UPLOAD_DIR=/app/uploads
       - NODE_ENV=development
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-AIzaSyBMXQsfG7_dQFvHQFFHZWImF-ziodVpocg}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
       - ./src:/app/src
       - ./public:/app/public
@@ -33,7 +33,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - UPLOAD_DIR=/app/uploads
       - NODE_ENV=development
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-AIzaSyBMXQsfG7_dQFvHQFFHZWImF-ziodVpocg}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
       - ./src:/app/src
       - ./worker.ts:/app/worker.ts
