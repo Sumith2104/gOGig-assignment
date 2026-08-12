@@ -1,0 +1,612 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  AlertCircle,
+  ShieldCheck,
+  Zap,
+  Eye,
+  Sun,
+  Copy,
+  Type,
+  Maximize2,
+  FileCode,
+  Info,
+  Trash2,
+  MapPin,
+  Target,
+  X,
+  Camera,
+  Layers,
+  Activity,
+  HardDrive,
+} from 'lucide-react';
+import { formatBytes, formatDuration } from '@/lib/utils';
+import { ConfirmModal } from '@/components/ui/confirm-modal';
+
+export default function ImageResultsPage({ params }: { params: { id: string } }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'original' | 'cv_annotated'>('cv_annotated');
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const fetchResults = async () => {
+    try {
+      const res = await fetch(`/api/images/${params.id}/results`);
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.message || `Failed to fetch results (${res.status})`);
+      }
+      const json = await res.json();
+      setData(json);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error loading results');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchResults();
+
+    const interval = setInterval(() => {
+      if (!data || data.status === 'PENDING' || data.status === 'PROCESSING') {
+        fetchResults();
+      }
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [params.id, data?.status]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isLightboxOpen) {
+        setIsLightboxOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isLightboxOpen]);
+
+  const handleDeleteConfirm = async () => {
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/images/${data.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        throw new Error('Failed to delete image');
+      }
+      window.location.href = '/images';
+    } catch (e) {
+      console.error(e);
+      setIsDeleting(false);
+      setIsDeleteModalOpen(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="py-24 text-center text-slate-500 text-sm font-semibold animate-pulse flex flex-col items-center justify-center space-y-3">
+        <Activity className="w-8 h-8 text-orange-600 animate-spin" />
+        <span>Loading detailed analysis results for image {params.id}...</span>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="max-w-xl mx-auto py-16 text-center space-y-4">
+        <AlertCircle className="w-12 h-12 text-rose-600 mx-auto" />
+        <h2 className="text-xl font-black text-slate-900">Record Not Found</h2>
+        <p className="text-xs text-slate-600 font-medium">{error || 'Could not load image analysis details.'}</p>
+        <Link
+          href="/images"
+          className="btn-orange inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-white text-xs font-bold"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Gallery</span>
+        </Link>
+      </div>
+    );
+  }
+
+  const metaResult = data.analysisResults?.find((r: any) => r.checkName === 'metadata_analysis');
+  const ocrResult = data.analysisResults?.find((r: any) => r.checkName === 'ocr_plate_validation');
+  const blurResult = data.analysisResults?.find((r: any) => r.checkName === 'blur_detection');
+
+  const getCheckIcon = (name: string) => {
+    switch (name) {
+      case 'blur_detection':
+        return Eye;
+      case 'brightness_analysis':
+        return Sun;
+      case 'duplicate_detection':
+        return Copy;
+      case 'ocr_plate_validation':
+        return Type;
+      case 'dimension_validation':
+        return Maximize2;
+      case 'metadata_analysis':
+        return FileCode;
+      default:
+        return Info;
+    }
+  };
+
+  const getCheckLabel = (name: string) => {
+    switch (name) {
+      case 'blur_detection':
+        return 'Blur Detection';
+      case 'brightness_analysis':
+        return 'Brightness Analysis';
+      case 'duplicate_detection':
+        return 'Duplicate Detection';
+      case 'ocr_plate_validation':
+        return 'Ocr Plate Validation';
+      case 'dimension_validation':
+        return 'Dimension Validation';
+      case 'metadata_analysis':
+        return 'Metadata Analysis';
+      default:
+        return name;
+    }
+  };
+
+  return (
+    <div className="space-y-8 max-w-7xl mx-auto pb-12">
+      {/* Navigation Header */}
+      <div className="flex items-center justify-between">
+        <Link
+          href="/images"
+          className="inline-flex items-center space-x-2 text-xs font-bold text-slate-600 hover:text-black transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Image List</span>
+        </Link>
+      </div>
+
+      {/* Top Banner Status */}
+      <div className="glass-panel p-6 rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center space-x-3">
+            <h1 className="text-xl font-black text-slate-900">{data.originalName}</h1>
+            <span
+              className={`px-3 py-0.5 text-[11px] font-extrabold rounded-full border ${
+                data.status === 'COMPLETED'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : data.status === 'PROCESSING'
+                  ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
+                  : 'bg-rose-50 text-rose-700 border-rose-200'
+              }`}
+            >
+              {data.status}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 font-mono">ID: {data.id}</p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-slate-700">
+          <div className="border-r border-slate-200 pr-4">
+            <span className="text-slate-400 block text-[10px] uppercase tracking-wider font-bold">File Size</span>
+            <span className="font-mono text-slate-900">{formatBytes(data.fileSize)}</span>
+          </div>
+          <div className="border-r border-slate-200 pr-4">
+            <span className="text-slate-400 block text-[10px] uppercase tracking-wider font-bold">Format</span>
+            <span className="font-mono text-slate-900">{data.mimeType.split('/')[1].toUpperCase()}</span>
+          </div>
+          <div className="border-r border-slate-200 pr-4">
+            <span className="text-slate-400 block text-[10px] uppercase tracking-wider font-bold">Processing Time</span>
+            <span className="font-mono text-slate-900">
+              {data.processedAt ? formatDuration(data.processingTimeMs) : 'In Progress'}
+            </span>
+          </div>
+          <button
+            onClick={async () => {
+              try {
+                await fetch(`/api/images/${data.id}/retry`, { method: 'POST' });
+                fetchResults();
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+            className="btn-orange px-3.5 py-2 rounded-xl text-white font-bold text-xs flex items-center space-x-1.5 shrink-0"
+          >
+            <Zap className="w-3.5 h-3.5 fill-current" />
+            <span>Re-run Pipeline</span>
+          </button>
+          <button
+            onClick={() => setIsDeleteModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold text-xs flex items-center space-x-1.5 shrink-0 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Delete</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Interactive CV Canvas & Physical Disk Storage Info */}
+      <div className="glass-panel p-6 rounded-2xl border border-slate-200 bg-white grid grid-cols-1 md:grid-cols-3 gap-6 items-start shadow-sm">
+        <div className="md:col-span-1 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+              <Target className="w-4 h-4 text-orange-600" /> Image Inspection Mode
+            </span>
+            <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-[11px] font-bold">
+              <button
+                onClick={() => setViewMode('original')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                  viewMode === 'original' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-black'
+                }`}
+              >
+                <Camera className="w-3 h-3" />
+                <span>Original</span>
+              </button>
+              <button
+                onClick={() => setViewMode('cv_annotated')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                  viewMode === 'cv_annotated' ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-600 hover:text-black'
+                }`}
+              >
+                <Layers className="w-3 h-3" />
+                <span>CV Map</span>
+              </button>
+            </div>
+          </div>
+
+          <div
+            onClick={() => setIsLightboxOpen(true)}
+            className="h-72 rounded-xl overflow-hidden bg-slate-900 border border-slate-200 relative group cursor-pointer hover:border-orange-500 transition-all shadow-sm"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={viewMode === 'cv_annotated' ? `/api/images/${data.id}/annotated` : `/api/images/${data.id}/file`}
+              alt={data.originalName}
+              className="w-full h-full object-contain bg-slate-950 group-hover:scale-105 transition-transform duration-300"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = `/api/images/${data.id}/file`;
+              }}
+            />
+            <div className="absolute top-3 left-3 bg-emerald-500/90 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-emerald-400 backdrop-blur-md shadow-sm">
+              Storage Verified
+            </div>
+            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+              <span className="bg-slate-900/90 text-white border border-slate-700 text-[10px] font-extrabold px-2.5 py-1 rounded-full backdrop-blur-md flex items-center gap-1.5">
+                {viewMode === 'cv_annotated' ? (
+                  <>
+                    <Layers className="w-3 h-3 text-orange-400" />
+                    <span>CV Overlay Active</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera className="w-3 h-3 text-slate-300" />
+                    <span>Original View</span>
+                  </>
+                )}
+              </span>
+              <span className="bg-slate-900/90 text-white text-[10px] font-bold px-2 py-1 rounded-lg border border-slate-700 backdrop-blur-md flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
+                <Maximize2 className="w-3 h-3" /> Fullscreen
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="md:col-span-2 space-y-4">
+          <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
+            <HardDrive className="w-4 h-4 text-slate-500" />
+            <span>Physical Storage & Computer Vision Extraction</span>
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+              <span className="text-slate-500 font-medium">Stored File Path:</span>
+              <p className="font-mono font-bold text-slate-900 text-[11px] truncate" title={data.storedPath}>
+                {data.storedPath}
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+              <span className="text-slate-500 font-medium">Direct Image Stream API:</span>
+              <p>
+                <a
+                  href={`/api/images/${data.id}/file`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-mono font-bold text-orange-600 hover:underline text-[11px]"
+                >
+                  /api/images/{data.id}/file
+                </a>
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+              <span className="text-slate-500 font-medium">CV Annotated Stream API:</span>
+              <p>
+                <a
+                  href={`/api/images/${data.id}/annotated`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-mono font-bold text-orange-600 hover:underline text-[11px]"
+                >
+                  /api/images/{data.id}/annotated
+                </a>
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+              <span className="text-slate-500 font-medium">Storage Status:</span>
+              <p className="font-bold text-emerald-700 text-[11px] flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Disk Write Confirmed & Readable</span>
+              </p>
+            </div>
+          </div>
+
+          <div
+            className={`p-4 rounded-xl border ${
+              metaResult?.details?.hasGps
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                : 'bg-slate-50 border-slate-200 text-slate-600'
+            } flex items-start gap-3`}
+          >
+            <MapPin
+              className={`w-5 h-5 shrink-0 mt-0.5 ${
+                metaResult?.details?.hasGps ? 'text-emerald-600' : 'text-slate-400'
+              }`}
+            />
+            <div className="space-y-1 text-xs">
+              <span className="font-bold block text-slate-900">GPS Metadata Inspection</span>
+              {metaResult?.details?.hasGps ? (
+                <div className="space-y-1">
+                  <p className="font-medium text-emerald-700">
+                    Location Geotag Found ({metaResult.details.gpsSource}):
+                  </p>
+                  <p className="font-mono font-bold text-black text-sm">
+                    Latitude: {metaResult.details.latitude} | Longitude: {metaResult.details.longitude}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-slate-500">No EXIF or visual overlay GPS coordinates detected</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Overall Score Banner */}
+      <div className="glass-panel p-6 rounded-2xl border border-slate-200 bg-white space-y-3 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <ShieldCheck className="w-5 h-5 text-orange-600" />
+            <h3 className="font-black text-slate-900 text-base">Overall Quality Score</h3>
+          </div>
+          <div className="flex items-center space-x-3">
+            <span className="text-xs font-bold text-slate-600">
+              {data.summary.passed} / {data.summary.totalChecks} Checks Passed ({Math.round((data.summary.passed / data.summary.totalChecks) * 100)}%)
+            </span>
+          </div>
+        </div>
+
+        <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200 p-0.5">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              data.summary.overallQualityScore >= 0.8
+                ? 'bg-emerald-500'
+                : data.summary.overallQualityScore >= 0.5
+                ? 'bg-amber-500'
+                : 'bg-rose-500'
+            }`}
+            style={{ width: `${Math.max(5, data.summary.overallQualityScore * 100)}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Check Grid */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-black text-slate-900">Automated Check Pipeline Breakdown</h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {data.analysisResults?.map((result: any) => {
+            const Icon = getCheckIcon(result.checkName);
+            const isPassed = result.passed;
+
+            return (
+              <div
+                key={result.checkName}
+                className="glass-panel p-5 rounded-2xl border border-slate-200 bg-white space-y-4 hover:border-slate-300 transition-all shadow-sm"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-orange-600">
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-slate-900 text-sm">{getCheckLabel(result.checkName)}</h4>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        Duration: {result.durationMs}ms
+                      </span>
+                    </div>
+                  </div>
+
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-extrabold flex items-center space-x-1 border ${
+                      isPassed
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-rose-50 text-rose-700 border-rose-200'
+                    }`}
+                  >
+                    {isPassed ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Passed</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        <span>Flagged</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+
+                <div
+                  className={`p-3 rounded-xl text-xs font-medium border ${
+                    isPassed
+                      ? 'bg-emerald-50/50 text-emerald-800 border-emerald-200'
+                      : 'bg-rose-50/50 text-rose-800 border-rose-200'
+                  }`}
+                >
+                  <div className="flex items-start space-x-2">
+                    <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      {result.checkName === 'blur_detection' && (
+                        <p>{isPassed ? 'Image is sharp with clear edge definitions.' : 'Image appears blurry or out of focus.'}</p>
+                      )}
+                      {result.checkName === 'brightness_analysis' && (
+                        <p>{isPassed ? 'Lighting and pixel luminance are within optimal range.' : 'Image lighting is too dark or overexposed.'}</p>
+                      )}
+                      {result.checkName === 'duplicate_detection' && (
+                        <p>{isPassed ? 'No perceptual duplicates found in database.' : 'Perceptually similar image already exists in database.'}</p>
+                      )}
+                      {result.checkName === 'ocr_plate_validation' && (
+                        <p>
+                          {isPassed
+                            ? `Extracted valid Indian vehicle plate: ${result.details?.normalizedPlate || 'Valid'}`
+                            : 'Indian vehicle number plate format could not be verified automatically. Ensure the license plate is clean and readable.'}
+                        </p>
+                      )}
+                      {result.checkName === 'dimension_validation' && (
+                        <p>{isPassed ? 'Image resolution and aspect ratio meet pipeline standards.' : 'Image dimensions or aspect ratio outside allowed bounds.'}</p>
+                      )}
+                      {result.checkName === 'metadata_analysis' && (
+                        <div>
+                          {result.details?.anomalies?.length > 0 ? (
+                            <ul className="list-disc list-inside space-y-1">
+                              {result.details.anomalies.map((a: string, idx: number) => (
+                                <li key={idx}>{a}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p>EXIF metadata intact with zero anomalies.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 pt-2 border-t border-slate-100 text-xs">
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500 font-medium">Metric Score:</span>
+                    <span className="font-mono font-bold text-slate-900">{result.score}</span>
+                  </div>
+
+                  {Object.entries(result.details || {}).map(([key, val]: [string, any]) => {
+                    if (key === 'anomalies') return null;
+                    return (
+                      <div key={key} className="flex justify-between py-1 border-b border-slate-100 text-[11px]">
+                        <span className="text-slate-500 font-medium capitalize">
+                          {key.replace(/([A-Z])/g, ' $1')}:
+                        </span>
+                        <span className="font-mono font-semibold text-slate-800 max-w-[200px] truncate" title={String(val)}>
+                          {typeof val === 'object' ? JSON.stringify(val) : String(val)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isDeleteModalOpen}
+        title="Delete Image & Analysis"
+        message={`Are you sure you want to permanently delete '${data.originalName}'? This action will remove the record and file from physical storage.`}
+        confirmLabel="Delete Image"
+        cancelLabel="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setIsDeleteModalOpen(false)}
+      />
+
+      {/* Modern Dark Lightbox Inspection Modal */}
+      {isLightboxOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex flex-col justify-between p-4 md:p-6 animate-in fade-in duration-200">
+          {/* Lightbox Top Control Bar */}
+          <div className="flex items-center justify-between text-white border-b border-slate-800 pb-4">
+            <div className="space-y-0.5">
+              <h2 className="text-base font-extrabold text-white flex items-center gap-2">
+                <Target className="w-5 h-5 text-orange-500" /> Fullscreen CV Feature & Bounding Box Inspection
+              </h2>
+              <p className="text-xs text-slate-400 font-mono">{data.originalName} — ID: {data.id}</p>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-1 bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs font-bold">
+                <button
+                  onClick={() => setViewMode('original')}
+                  className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                    viewMode === 'original' ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>Original Photo</span>
+                </button>
+                <button
+                  onClick={() => setViewMode('cv_annotated')}
+                  className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                    viewMode === 'cv_annotated' ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>CV Feature Map</span>
+                </button>
+              </div>
+
+              <button
+                onClick={() => setIsLightboxOpen(false)}
+                className="w-9 h-9 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center transition-colors border border-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Centered Main Image Viewer */}
+          <div className="flex-1 my-4 flex items-center justify-center relative overflow-hidden rounded-2xl bg-slate-950 border border-slate-800 p-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={viewMode === 'cv_annotated' ? `/api/images/${data.id}/annotated` : `/api/images/${data.id}/file`}
+              alt={data.originalName}
+              className="max-w-full max-h-[82vh] object-contain rounded-xl shadow-2xl"
+            />
+          </div>
+
+          {/* Lightbox Footer Info Bar */}
+          <div className="flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 border-t border-slate-800 pt-3 gap-2">
+            <div className="flex items-center space-x-4">
+              <span>Press <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-slate-200">ESC</kbd> or click button to exit</span>
+              {ocrResult?.details?.normalizedPlate && (
+                <span className="text-emerald-400 font-mono font-bold">
+                  Extracted Plate: {ocrResult.details.normalizedPlate}
+                </span>
+              )}
+              {blurResult?.details?.laplacianStdev && (
+                <span className="text-slate-300 font-mono">
+                  Laplacian: {blurResult.details.laplacianStdev} stdev
+                </span>
+              )}
+            </div>
+            <span className="text-orange-500 font-bold font-mono">VehicleIQ Computer Vision Engine v1.0</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

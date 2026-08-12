@@ -1,0 +1,60 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model Image {
+  id             String           @id @default(uuid())
+  originalName   String           @map("original_name")
+  storedPath     String           @unique @map("stored_path")
+  fileSize       Int              @map("file_size")
+  mimeType       String           @map("mime_type")
+  phash          String?
+  idempotencyKey String?          @unique @map("idempotency_key")
+
+  status         ProcessingStatus @default(PENDING)
+  failureReason  String?          @map("failure_reason")
+  retryCount     Int              @default(0) @map("retry_count")
+
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  processedAt    DateTime?        @map("processed_at")
+
+  analysisResults AnalysisResult[]
+
+  @@index([status])
+  @@index([phash])
+  @@index([createdAt])
+  @@index([idempotencyKey])
+  @@map("images")
+}
+
+model AnalysisResult {
+  id         String   @id @default(uuid())
+  imageId    String   @map("image_id")
+  checkName  String   @map("check_name")
+  passed     Boolean
+  score      Float?
+  details    Json?
+  error      String?
+  durationMs Int?     @map("duration_ms")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  image Image @relation(fields: [imageId], references: [id], onDelete: Cascade)
+
+  @@unique([imageId, checkName])
+  @@index([imageId])
+  @@map("analysis_results")
+}
