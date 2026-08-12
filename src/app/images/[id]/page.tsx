@@ -504,13 +504,17 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
 
                   {Object.entries(result.details || {}).map(([key, val]: [string, any]) => {
                     if (key === 'anomalies') return null;
+                    if (key === 'rawText' && result.details?.formatValid) return null;
+                    const formattedVal = typeof val === 'object' ? JSON.stringify(val) : String(val);
+                    const truncated = formattedVal.length > 35 ? formattedVal.substring(0, 32) + '...' : formattedVal;
+
                     return (
-                      <div key={key} className="flex justify-between py-1 border-b border-slate-100 text-[11px]">
+                      <div key={key} className="flex justify-between items-center py-1 border-b border-slate-100 text-[11px]">
                         <span className="text-slate-500 font-medium capitalize">
                           {key.replace(/([A-Z])/g, ' $1')}:
                         </span>
-                        <span className="font-mono font-semibold text-slate-800 max-w-[200px] truncate" title={String(val)}>
-                          {typeof val === 'object' ? JSON.stringify(val) : String(val)}
+                        <span className="font-mono font-semibold text-slate-800 max-w-[220px] truncate" title={formattedVal}>
+                          {truncated}
                         </span>
                       </div>
                     );
@@ -592,18 +596,18 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
           <div className="flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 border-t border-slate-800 pt-3 gap-2">
             <div className="flex items-center space-x-4">
               <span>Press <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-slate-200">ESC</kbd> or click button to exit</span>
-              {ocrResult?.details?.normalizedPlate && (
-                <span className="text-emerald-400 font-mono font-bold">
-                  Extracted Plate: {ocrResult.details.normalizedPlate}
+              {ocrResult?.details?.formatValid && ocrResult?.details?.normalizedPlate && (
+                <span className="text-emerald-400 font-mono font-bold bg-emerald-950/80 px-2.5 py-1 rounded-md border border-emerald-800/60">
+                  License Plate: {ocrResult.details.normalizedPlate}
                 </span>
               )}
               {blurResult?.details?.laplacianStdev && (
-                <span className="text-slate-300 font-mono">
-                  Laplacian: {blurResult.details.laplacianStdev} stdev
+                <span className="text-slate-300 font-mono bg-slate-900 px-2.5 py-1 rounded-md border border-slate-800">
+                  Laplacian: {Number(blurResult.details.laplacianStdev).toFixed(2)} stdev
                 </span>
               )}
             </div>
-            <span className="text-orange-500 font-bold font-mono">VehicleIQ Computer Vision Engine v1.0</span>
+            <span className="text-orange-500 font-bold font-mono">VehicleIQ Vision Pipeline</span>
           </div>
         </div>
       )}
