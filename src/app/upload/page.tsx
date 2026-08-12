@@ -11,6 +11,10 @@ import {
   Zap,
   ArrowRight,
   ShieldAlert,
+  HelpCircle,
+  Sun,
+  Camera,
+  Layers,
 } from 'lucide-react';
 import { formatBytes } from '@/lib/utils';
 
@@ -22,6 +26,7 @@ export default function UploadPage() {
   const [error, setError] = useState<string | null>(null);
   const [uploadedImageId, setUploadedImageId] = useState<string | null>(null);
   const [processingStatus, setProcessingStatus] = useState<any>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -54,6 +59,7 @@ export default function UploadPage() {
     if (!file) return;
     setUploading(true);
     setError(null);
+    setElapsedSeconds(0);
 
     try {
       const formData = new FormData();
@@ -78,6 +84,19 @@ export default function UploadPage() {
     }
   };
 
+  // Timer for processing elapsed time
+  useEffect(() => {
+    if (!uploadedImageId || processingStatus?.status === 'COMPLETED' || processingStatus?.status === 'FAILED') {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setElapsedSeconds((prev) => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [uploadedImageId, processingStatus?.status]);
+
   useEffect(() => {
     if (!uploadedImageId) return;
 
@@ -97,7 +116,7 @@ export default function UploadPage() {
       } catch (err) {
         console.error('Status polling error:', err);
       }
-    }, 2000);
+    }, 1500);
 
     return () => {
       isMounted = false;
@@ -106,28 +125,61 @@ export default function UploadPage() {
   }, [uploadedImageId]);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 pb-12">
+    <div className="max-w-5xl mx-auto space-y-8 pb-12">
       <div>
-        <h1 className="text-2xl font-black text-slate-900 tracking-tight">Upload Vehicle Image</h1>
+        <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Upload Vehicle Image</h1>
         <p className="text-slate-600 text-xs mt-1 font-medium">
           Ingest vehicle photos for asynchronous quality checks, OCR plate extraction, and forensic verification
         </p>
       </div>
+
+      {/* Guidelines Instructions Section for Optimal Inspection Quality */}
+      {!uploadedImageId && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="card-3d p-4 space-y-2">
+            <div className="flex items-center space-x-2 text-slate-900 font-extrabold text-xs">
+              <Sun className="w-4 h-4 text-amber-500" />
+              <span>1. Clear Lighting & Contrast</span>
+            </div>
+            <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
+              Capture photos in well-lit daylight or illuminated night conditions. Avoid extreme dark shadows across license plates.
+            </p>
+          </div>
+
+          <div className="card-3d p-4 space-y-2">
+            <div className="flex items-center space-x-2 text-slate-900 font-extrabold text-xs">
+              <Camera className="w-4 h-4 text-emerald-600" />
+              <span>2. 2-5m Distance & Steady Focus</span>
+            </div>
+            <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
+              Keep phone camera steady to prevent motion blur (Laplacian score &gt; 10.0) and frame the full rear/front vehicle bumper.
+            </p>
+          </div>
+
+          <div className="card-3d p-4 space-y-2">
+            <div className="flex items-center space-x-2 text-slate-900 font-extrabold text-xs">
+              <Layers className="w-4 h-4 text-orange-600" />
+              <span>3. Commercial 2-Line Yellow Plates</span>
+            </div>
+            <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
+              For auto-rickshaws and commercial taxis, ensure both yellow panel lines (e.g. MH12K + R1145) are fully visible in frame.
+            </p>
+          </div>
+        </div>
+      )}
 
       {!uploadedImageId ? (
         <div className="space-y-6">
           <div
             onDragOver={handleDragOver}
             onDrop={handleDrop}
-            className={`glass-panel p-10 rounded-2xl border-2 border-dashed text-center transition-all duration-300 bg-white ${
-              file
-                ? 'border-orange-500 bg-orange-50/50'
-                : 'border-slate-300 hover:border-orange-500 hover:bg-slate-50'
+            className={`card-3d p-10 text-center transition-all duration-300 bg-white ${
+              file ? 'bg-slate-50 border-2 border-slate-900' : 'hover:bg-slate-50'
             }`}
           >
             {previewUrl ? (
               <div className="space-y-4">
-                <div className="relative w-48 h-48 mx-auto rounded-xl overflow-hidden border border-slate-200 shadow-md">
+                <div className="relative w-52 h-52 mx-auto overflow-hidden shadow-md">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
                 </div>
@@ -142,18 +194,18 @@ export default function UploadPage() {
                   }}
                   className="text-xs text-rose-600 hover:underline font-bold"
                 >
-                  Change Image
+                  Change Selected Image
                 </button>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="w-16 h-16 rounded-2xl bg-orange-100 flex items-center justify-center mx-auto text-orange-600">
+                <div className="w-16 h-16 bg-slate-900 flex items-center justify-center mx-auto text-white shadow-md">
                   <UploadCloud className="w-8 h-8" />
                 </div>
                 <div>
-                  <p className="text-slate-900 font-bold text-base">
+                  <p className="text-slate-900 font-extrabold text-base">
                     Drag & drop your vehicle image here, or{' '}
-                    <label className="text-orange-600 hover:underline cursor-pointer font-extrabold">
+                    <label className="text-orange-600 hover:underline cursor-pointer font-black">
                       browse
                       <input
                         type="file"
@@ -170,7 +222,7 @@ export default function UploadPage() {
           </div>
 
           {error && (
-            <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center space-x-3">
+            <div className="p-4 bg-rose-50 border-l-4 border-l-rose-600 text-rose-700 text-xs font-bold flex items-center space-x-3">
               <AlertCircle className="w-5 h-5 shrink-0 text-rose-600" />
               <span>{error}</span>
             </div>
@@ -180,55 +232,63 @@ export default function UploadPage() {
             <button
               onClick={handleUpload}
               disabled={!file || uploading}
-              className="btn-orange flex items-center space-x-2 px-6 py-3 rounded-xl text-white font-bold text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-orange flex items-center space-x-2 px-6 py-3 text-white font-bold text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {uploading ? (
                 <>
                   <Clock className="w-4 h-4 animate-spin" />
-                  <span>Uploading...</span>
+                  <span>Uploading to Ingestion Pipeline...</span>
                 </>
               ) : (
                 <>
                   <Zap className="w-4 h-4 fill-current" />
-                  <span>Ingest & Run Pipeline</span>
+                  <span>Ingest & Run Inspection</span>
                 </>
               )}
             </button>
           </div>
         </div>
       ) : (
-        <div className="glass-panel p-8 rounded-2xl border border-slate-200 bg-white space-y-6 shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-6">
+        <div className="card-3d p-8 space-y-6 bg-white">
+          {/* Header with Live Processing Timer */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-200 pb-6 gap-4">
             <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600">
+              <div className="w-12 h-12 bg-slate-900 flex items-center justify-center text-white shadow-md">
                 <FileImage className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="font-extrabold text-slate-900 text-lg">{file?.name || 'Uploaded Image'}</h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  ID: <span className="font-mono text-slate-900 font-bold">{uploadedImageId}</span>
+                <h3 className="font-black text-slate-900 text-lg">{file?.name || 'Uploaded Image'}</h3>
+                <p className="text-xs text-slate-500 font-mono">
+                  ID: <span className="text-slate-900 font-bold">{uploadedImageId}</span>
                 </p>
               </div>
             </div>
-            <div>
+
+            <div className="flex items-center space-x-3">
+              {/* Real-time Timer Badge */}
+              <div className="px-3.5 py-1.5 bg-slate-900 text-white text-xs font-mono font-bold flex items-center space-x-2 shadow-sm">
+                <Clock className="w-3.5 h-3.5 text-orange-400 animate-spin" />
+                <span>Elapsed: {elapsedSeconds}s</span>
+              </div>
+
               {processingStatus?.status === 'COMPLETED' && (
-                <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5 shadow-sm">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Pipeline Completed
+                <span className="px-3.5 py-1.5 text-xs font-extrabold bg-emerald-900 text-emerald-100 flex items-center gap-1.5 shadow-sm">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Pipeline Completed
                 </span>
               )}
               {processingStatus?.status === 'PROCESSING' && (
-                <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1.5 animate-pulse shadow-sm">
-                  <Clock className="w-4 h-4 animate-spin text-amber-600" /> Processing Analyzers...
+                <span className="px-3.5 py-1.5 text-xs font-extrabold bg-amber-900 text-amber-100 flex items-center gap-1.5 animate-pulse shadow-sm">
+                  <Clock className="w-4 h-4 animate-spin text-amber-400" /> Analyzing...
                 </span>
               )}
               {processingStatus?.status === 'FAILED' && (
-                <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1.5 shadow-sm">
-                  <ShieldAlert className="w-4 h-4 text-rose-600" /> Pipeline Failed
+                <span className="px-3.5 py-1.5 text-xs font-extrabold bg-rose-900 text-rose-100 flex items-center gap-1.5 shadow-sm">
+                  <ShieldAlert className="w-4 h-4 text-rose-400" /> Pipeline Flagged
                 </span>
               )}
               {(!processingStatus || processingStatus?.status === 'PENDING') && (
-                <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-orange-100 text-orange-800 border border-orange-300 shadow-sm">
-                  Queued in BullMQ
+                <span className="px-3.5 py-1.5 text-xs font-extrabold bg-slate-800 text-slate-100 shadow-sm">
+                  Queued in Worker
                 </span>
               )}
             </div>

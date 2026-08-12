@@ -15,11 +15,42 @@ body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
+/* 3D Elevated Greyed Card Blocks */
+.card-3d {
+  background: #ffffff;
+  border-radius: 0px;
+  box-shadow: 0 4px 10px -2px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card-3d:hover {
+  background: #f8fafc;
+  transform: translateY(-3px);
+  box-shadow: 0 16px 32px -4px rgba(0, 0, 0, 0.12), 0 6px 14px -4px rgba(0, 0, 0, 0.08);
+}
+
+/* Greyed Selected Block State (Replaces Orange Active State) */
+.grey-block-active {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.3) !important;
+}
+
+.grey-block-neutral {
+  background-color: #f1f5f9;
+  color: #334155;
+}
+
+.grey-block-neutral:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
 /* Light Enterprise Card Panels */
 .glass-panel {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  border-radius: 0px;
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
 .glass-panel-hover {
@@ -27,10 +58,9 @@ body {
 }
 
 .glass-panel-hover:hover {
-  background: #ffffff;
-  border-color: #cbd5e1;
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px -5px rgba(234, 88, 12, 0.12);
+  background: #f8fafc;
+  transform: translateY(-3px);
+  box-shadow: 0 16px 30px -5px rgba(0, 0, 0, 0.1);
 }
 
 /* Primary Accent Button */
@@ -38,9 +68,9 @@ body {
   background: linear-gradient(135deg, #ff6b00 0%, #ea580c 100%);
   color: #ffffff;
   font-weight: 700;
+  border-radius: 0px;
   transition: all 0.2s ease;
   box-shadow: 0 4px 14px 0 rgba(234, 88, 12, 0.25);
-  border: 1px solid rgba(249, 115, 22, 0.3);
 }
 
 .btn-orange:hover {
@@ -61,7 +91,7 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
-  border-radius: 4px;
+  border-radius: 0px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
