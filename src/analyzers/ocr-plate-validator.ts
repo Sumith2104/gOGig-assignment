@@ -161,111 +161,104 @@ export class OcrPlateValidator implements Analyzer {
       return null;
     }
 
-    try {
-      logger.info('Invoking Gemini Vision AI for vehicle license plate extraction...');
-      const base64Image = buffer.toString('base64');
-      const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    // Best production vision models ordered by speed & availability
+    const candidateModels = [
+      'gemini-flash-latest',
+      'gemini-3.6-flash',
+      'gemini-3.5-flash',
+      'gemini-2.5-flash',
+    ];
 
-      const promptText = `Analyze this vehicle image and find the vehicle registration number / license plate. Look carefully at bumper plates, yellow commercial 2-line plates (e.g. auto-rickshaws with line 1 "MH12K" and line 2 "R1145" -> return "MH12KR1145", "HR55U" + "0390" -> "HR55U0390"), white plates, and rear/side body numbers. Return ONLY a JSON object with keys:
+    const base64Image = buffer.toString('base64');
+    const promptText = `Analyze this vehicle image and find the vehicle registration number / license plate. Look carefully at bumper plates, yellow commercial 2-line plates (e.g. auto-rickshaws with line 1 "MH12K" and line 2 "R1145" -> return "MH12KR1145", "HR55U" + "0390" -> "HR55U0390"), white plates, and rear/side body numbers. Return ONLY a JSON object with keys:
 "plateNumber": normalized uppercase string without spaces/hyphens (e.g. "MH12KR1145", "HR55U0390", "TN05BT5754", "MH12NW8556"), or null if no plate present,
 "rawText": unmodified exact printed text,
 "boundingBox": object with keys "leftPercent", "topPercent", "widthPercent", "heightPercent" (numbers between 0 and 100 representing bounding box location),
 "confidence": confidence score between 0.0 and 1.0,
 "plateColor": string like "yellow" or "white".`;
 
-      const requestBody = JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: promptText },
-              {
-                inlineData: {
-                  mimeType: 'image/jpeg',
-                  data: base64Image,
-                },
+    const requestBody = JSON.stringify({
+      contents: [
+        {
+          parts: [
+            { text: promptText },
+            {
+              inlineData: {
+                mimeType: 'image/jpeg',
+                data: base64Image,
               },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.1,
-          responseMimeType: 'application/json',
-          thinkingConfig: { thinkingBudget: 0 },
+            },
+          ],
         },
-      });
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        responseMimeType: 'application/json',
+      },
+    });
 
-      // Retry logic with per-request 12s timeout via AbortController
-      let response: Response | null = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 12000);
+    for (const modelName of candidateModels) {
+      try {
+        logger.info({ modelName }, 'Invoking Gemini Vision AI for vehicle license plate extraction...');
+        const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
-          response = await fetch(requestUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: requestBody,
-            signal: controller.signal,
-          });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout per model
 
-          clearTimeout(timeoutId);
-        } catch (fetchErr) {
-          logger.warn({ attempt: attempt + 1, error: fetchErr instanceof Error ? fetchErr.message : fetchErr }, 'Gemini fetch failed/timed out');
-          response = null;
-          if (attempt < 2) {
-            await new Promise((r) => setTimeout(r, 1000));
-            continue;
-          }
-          return null;
-        }
+        const response = await fetch(requestUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: requestBody,
+          signal: controller.signal,
+        });
 
-        if (response.ok) break;
+        clearTimeout(timeoutId);
 
-        if ((response.status === 503 || response.status === 429) && attempt < 2) {
-          logger.warn({ status: response.status, attempt: attempt + 1 }, 'Gemini API rate-limited, retrying...');
-          await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+        if (!response.ok) {
+          let errorBody = '';
+          try { errorBody = await response.text(); } catch {}
+          logger.warn({ modelName, status: response.status, body: errorBody.substring(0, 300) }, 'Gemini Vision AI model returned non-OK status, trying next candidate model...');
           continue;
         }
 
-        let errorBody = '';
-        try { errorBody = await response.text(); } catch {}
-        logger.warn({ status: response.status, body: errorBody.substring(0, 500) }, 'Gemini Vision AI API returned non-OK status');
-        return null;
-      }
+        const responseData = await response.json();
+        const textOutput = responseData?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!textOutput) continue;
 
-      if (!response || !response.ok) return null;
+        // Clean JSON markdown blocks if present (```json ... ```)
+        const jsonMatch = textOutput.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) continue;
 
-      const responseData = await response.json();
-      const textOutput = responseData?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!textOutput) return null;
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (!parsed.plateNumber) continue;
 
-      const parsed = JSON.parse(textOutput);
-      if (!parsed.plateNumber) return null;
+        const normResult = this.normalizeAndFuzzyFixPlate(parsed.plateNumber);
+        const finalPlate = normResult.isMatch ? normResult.normalized : parsed.plateNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-      const normResult = this.normalizeAndFuzzyFixPlate(parsed.plateNumber);
-      const finalPlate = normResult.isMatch ? normResult.normalized : parsed.plateNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        let bbox: { left: number; top: number; width: number; height: number } | undefined;
+        if (parsed.boundingBox && typeof parsed.boundingBox.leftPercent === 'number') {
+          bbox = {
+            left: Math.floor((parsed.boundingBox.leftPercent / 100) * width),
+            top: Math.floor((parsed.boundingBox.topPercent / 100) * height),
+            width: Math.floor((parsed.boundingBox.widthPercent / 100) * width),
+            height: Math.floor((parsed.boundingBox.heightPercent / 100) * height),
+          };
+        }
 
-      let bbox: { left: number; top: number; width: number; height: number } | undefined;
-      if (parsed.boundingBox && typeof parsed.boundingBox.leftPercent === 'number') {
-        bbox = {
-          left: Math.floor((parsed.boundingBox.leftPercent / 100) * width),
-          top: Math.floor((parsed.boundingBox.topPercent / 100) * height),
-          width: Math.floor((parsed.boundingBox.widthPercent / 100) * width),
-          height: Math.floor((parsed.boundingBox.heightPercent / 100) * height),
+        return {
+          plateNumber: finalPlate,
+          rawText: parsed.rawText || parsed.plateNumber,
+          boundingBox: bbox,
+          confidence: parsed.confidence || 0.95,
+          plateColor: parsed.plateColor || 'yellow',
         };
+      } catch (err) {
+        logger.warn({ modelName, error: err instanceof Error ? err.message : err }, 'Gemini Vision AI model attempt failed, trying next candidate model...');
+        continue;
       }
-
-      return {
-        plateNumber: finalPlate,
-        rawText: parsed.rawText || parsed.plateNumber,
-        boundingBox: bbox,
-        confidence: parsed.confidence || 0.95,
-        plateColor: parsed.plateColor || 'yellow',
-      };
-    } catch (err) {
-      logger.warn({ error: err instanceof Error ? err.message : err }, 'Gemini Vision AI extraction exception');
-      return null;
     }
+
+    return null;
   }
 
   private async performOcrWithTimeout(
