@@ -353,15 +353,16 @@ export class OcrPlateValidator implements Analyzer {
 
       for (const cand of candidates) {
         const check = this.normalizeAndFuzzyFixPlate(cand);
-        if (check.isMatch) {
-          bestPlate = check.normalized;
+        if (check.isMatch && check.normalized) {
+          const plateStr = check.normalized;
+          bestPlate = plateStr;
           bestConfidence = 95;
 
           // Find bounding box for the line containing state prefix (e.g., "MH", "TN", "DL")
-          const statePrefix = bestPlate.substring(0, 2);
+          const statePrefix = plateStr.substring(0, 2);
           const matchingLine = lineBoxes.find(l =>
             l.text.toUpperCase().includes(statePrefix) ||
-            l.text.toUpperCase().includes(bestPlate.substring(0, 4))
+            l.text.toUpperCase().includes(plateStr.substring(0, Math.min(4, plateStr.length)))
           );
 
           if (matchingLine?.bbox) {
