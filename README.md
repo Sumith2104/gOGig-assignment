@@ -258,7 +258,15 @@ The OCR & Plate Validation analyzer uses a **3-tier hybrid AI architecture** for
 
 ## 📸 Live Demo & Inspection Reports
 
-> **Live Deployment**: [https://13.234.120.49.sslip.io/images](https://13.234.120.49.sslip.io/images)
+> **Live Deployment**: [https://13.234.120.49.sslip.io](https://13.234.120.49.sslip.io)
+
+### Executive Real-Time Dashboard
+
+The main monitoring dashboard provides real-time ingestion counters, worker status, queue processing telemetry, and immediate access to the 6-stage analyzer breakdown.
+
+![VehicleIQ Media Processing Engine — Main Monitoring Dashboard](docs/screenshots/dashboard.png)
+
+---
 
 ### Image Analysis Gallery Overview
 
