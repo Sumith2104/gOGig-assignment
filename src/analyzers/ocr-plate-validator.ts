@@ -478,7 +478,7 @@ export class OcrPlateValidator implements Analyzer {
       };
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2.0s fast timeout
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5.0s timeout for AWS Bedrock Vision AI
 
       const res = await client.send(
         new InvokeModelCommand({
