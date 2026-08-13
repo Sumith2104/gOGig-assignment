@@ -159,6 +159,7 @@ export class OcrPlateValidator implements Analyzer {
     boundingBox?: { left: number; top: number; width: number; height: number };
     confidence: number;
     plateColor?: string;
+    campaignBrand?: string | null;
   } | null> {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey.trim() === '') {
@@ -174,8 +175,9 @@ export class OcrPlateValidator implements Analyzer {
     ];
 
     const base64Image = buffer.toString('base64');
-    const promptText = `Analyze this vehicle image and find the vehicle registration number / license plate. Look carefully at bumper plates, yellow commercial 2-line plates (e.g. auto-rickshaws with line 1 "MH12K" and line 2 "R1145" -> return "MH12KR1145", "HR55U" + "0390" -> "HR55U0390"), white plates, and rear/side body numbers. Return ONLY a JSON object with keys:
+    const promptText = `Analyze this vehicle image and find the vehicle registration number / license plate AND any prominent outdoor campaign advertisement brand name. Look carefully at bumper plates, yellow commercial 2-line plates (e.g. auto-rickshaws with line 1 "MH12K" and line 2 "R1145" -> return "MH12KR1145", "HR55U" + "0390" -> "HR55U0390"), white plates, and rear/side body numbers. Return ONLY a JSON object with keys:
 "plateNumber": normalized uppercase string without spaces/hyphens (e.g. "MH12KR1145", "HR55U0390", "TN05BT5754", "MH12NW8556"), or null if no plate present,
+"campaignBrand": prominent advertisement brand name, slogan, or campaign title visible on the vehicle hood wrap/banner (e.g. "ARENA ANIMATION", "PUNE-FC ROAD 7755900813"), or null if none,
 "rawText": unmodified exact printed text,
 "boundingBox": object with keys "leftPercent", "topPercent", "widthPercent", "heightPercent" (numbers between 0 and 100 representing bounding box location),
 "confidence": confidence score between 0.0 and 1.0,
@@ -255,6 +257,7 @@ export class OcrPlateValidator implements Analyzer {
           boundingBox: bbox,
           confidence: parsed.confidence || 0.95,
           plateColor: parsed.plateColor || 'yellow',
+          campaignBrand: parsed.campaignBrand || null,
         };
       } catch (err) {
         logger.warn({ modelName, error: err instanceof Error ? err.message : err }, 'Gemini Vision AI model attempt failed, trying next candidate model...');
@@ -273,6 +276,7 @@ export class OcrPlateValidator implements Analyzer {
     boundingBox?: { left: number; top: number; width: number; height: number };
     sourceAI?: boolean;
     confidence?: number;
+    campaignBrand?: string | null;
   }> {
     let worker: any = null;
 
@@ -295,6 +299,7 @@ export class OcrPlateValidator implements Analyzer {
           boundingBox: bbox,
           sourceAI: true,
           confidence: geminiResult.confidence,
+          campaignBrand: geminiResult.campaignBrand || null,
         };
       }
 
@@ -524,6 +529,7 @@ export class OcrPlateValidator implements Analyzer {
         details: {
           rawText,
           normalizedPlate: bestMatch.normalized || null,
+          campaignBrand: ocrResult.campaignBrand || null,
           formatValid: bestMatch.isMatch,
           fixedByHeuristic: bestMatch.fixedByHeuristic,
           regexPattern: '^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$',
