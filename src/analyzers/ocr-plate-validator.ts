@@ -556,7 +556,15 @@ Compare BOTH the image and the extracted text to identify the primary corporate 
 
     // 3. Combine adjacent line vertically if present (e.g. Line 1 "ARENA" + Line 2 "ANIMATION")
     const topY = topCand.bbox?.Top ?? 0;
-    const adj = candidates.slice(1).find(c => Math.abs((c.bbox?.Top ?? 0) - topY) < 0.12 && c.text.trim() !== rawBrand);
+    const topX = topCand.bbox?.Left ?? 0;
+    const adj = candidates.slice(1).find(c => {
+      const txt = c.text.trim().toUpperCase();
+      if (txt === 'ALL' || txt.length < 3) return false;
+      const dY = Math.abs((c.bbox?.Top ?? 0) - topY);
+      const dX = Math.abs((c.bbox?.Left ?? 0) - topX);
+      return dY < 0.15 && dX < 0.25;
+    });
+
     if (adj) {
       rawBrand = (topCand.bbox?.Top ?? 0) < (adj.bbox?.Top ?? 0)
         ? `${topCand.text.trim()} ${adj.text.trim()}`
