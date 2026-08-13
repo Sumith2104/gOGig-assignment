@@ -323,15 +323,15 @@ export class OcrPlateValidator implements Analyzer {
       }
 
       let allDetectedTextCombined = '';
+      const allLineBoxes: { text: string; bbox?: any; confidence: number }[] = [];
       let bestPlate: string | null = null;
       let bestBbox: { left: number; top: number; width: number; height: number } | undefined;
       let bestConfidence = 0;
 
-      for (let passIndex = 0; passIndex < passes.length; passIndex++) {
-        const pass = passes[passIndex];
+      for (const pass of passes) {
         const command = new DetectTextCommand({ Image: { Bytes: pass.buffer } });
 
-        logger.info({ passIndex: passIndex + 1, isCropPass: Boolean(pass.cropRegion) }, 'Invoking AWS Rekognition DetectText...');
+        logger.info({ isCropPass: Boolean(pass.cropRegion) }, 'Invoking AWS Rekognition DetectText...');
         const response = await client.send(command);
 
         if (!response.TextDetections || response.TextDetections.length === 0) continue;
@@ -345,11 +345,15 @@ export class OcrPlateValidator implements Analyzer {
 
           if (detection.Type === 'LINE') {
             lineDetections.push(detection.DetectedText);
-            lineBoxes.push({
+            const box = {
               text: detection.DetectedText,
               bbox: detection.Geometry?.BoundingBox,
               confidence: detection.Confidence || 85,
-            });
+            };
+            lineBoxes.push(box);
+            if (!pass.cropRegion) {
+              allLineBoxes.push(box);
+            }
           } else if (detection.Type === 'WORD') {
             wordDetections.push(detection.DetectedText);
           }
@@ -407,8 +411,8 @@ export class OcrPlateValidator implements Analyzer {
         return null;
       }
 
-      // Extract campaign brand from all detected text across all passes
-      const campaignBrand = this.extractCampaignBrand(allDetectedTextCombined, '');
+      // 100% Dynamic Brand Extraction based on visual geometry & prominence
+      const campaignBrand = this.extractDynamicCampaignBrand(allLineBoxes);
 
       logger.info({ plate: bestPlate, confidence: bestConfidence, campaignBrand, boundingBox: bestBbox }, 'AWS Rekognition successfully detected license plate');
 
@@ -426,53 +430,54 @@ export class OcrPlateValidator implements Analyzer {
   }
 
   /**
-   * Extract campaign/advertiser brand name from OCR text
+   * 100% DYNAMIC Campaign/Advertiser Brand Extractor
+   * Uses Computer Vision geometry & text layout analysis:
+   * Finds the most prominent, largest title line printed in the upper ad wrap area.
    */
-  private extractCampaignBrand(rawText: string, filename: string): string | null {
-    const combined = `${rawText} ${filename}`.toUpperCase();
+  private extractDynamicCampaignBrand(
+    lineBoxes: Array<{ text: string; bbox?: { Left?: number; Top?: number; Width?: number; Height?: number } }>
+  ): string | null {
+    if (!lineBoxes || lineBoxes.length === 0) return null;
 
-    // 1. Specific Brand Signature Patterns
-    if (/SRI\s*SRI|TATTVA|SUDANTA|OJASVITA|SHUDDHTA/i.test(combined)) {
-      return 'SriSri Tattva';
-    }
-    if (/ARENA\s*ANIMATION|ARENA|ANIMATION/i.test(combined)) {
-      return 'ARENA ANIMATION';
-    }
-    if (/AGARWAL|EYE\s*HOSPITAL|DR\s*AGARWAL/i.test(combined)) {
-      return 'Dr Agarwals Eye Hospital';
-    }
-    if (/CMWSSB/i.test(combined)) {
-      return 'CMWSSB';
-    }
-    if (/PUNE.*FC.*ROAD|FC\s*ROAD/i.test(combined)) {
-      return 'PUNE FC ROAD Campaign';
-    }
+    const noiseRegex = /^[0-9\s\-\.]+$|MH[0-9]|TN[0-9]|WB[0-9]|KA[0-9]|DL[0-9]|KL[0-9]|HR[0-9]|UP[0-9]|GJ[0-9]|COMPACT|IND|CNG|DIESEL|PETROL|CALL|TEL|PHONE|WWW|HTTP|EMAIL|PUNE|CITY|STOP|PERMIT|SPEED|ALL INDIA|APPLY|TERMS|REDMI|CAMERA|PHOTO|NOTE|MI DUAL|PRO\b/i;
 
-    // Known test dataset plate fallbacks
-    if (/MH12NW8556|MH12KR1145/i.test(combined)) {
-      return 'ARENA ANIMATION';
-    }
-    if (/TN05BT5754/i.test(combined)) {
-      return 'Dr Agarwals Eye Hospital';
-    }
-    if (/WB73E9248/i.test(combined)) {
-      return 'SriSri Tattva';
-    }
+    // Filter lines located in the upper 75% of the image that are not noise
+    const candidates = lineBoxes.filter(l => {
+      if (!l.text || l.text.trim().length < 3) return false;
+      const clean = l.text.trim();
+      if (noiseRegex.test(clean)) return false;
+      const top = l.bbox?.Top ?? 0.5;
+      return top < 0.75;
+    });
 
-    // 2. Generic Dynamic Brand Headline Extractor
-    const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    const noisePattern = /^[0-9\s\-\.]+$|MH[0-9]|TN[0-9]|WB[0-9]|KA[0-9]|DL[0-9]|KL[0-9]|HR[0-9]|UP[0-9]|GJ[0-9]|COMPACT|IND|CNG|DIESEL|PETROL|CALL|TEL|PHONE|WWW|HTTP|EMAIL|PUNE|CITY|STOP|PERMIT|SPEED|ALL INDIA|APPLY|TERMS/i;
+    if (candidates.length === 0) return null;
 
-    for (const line of lines) {
-      const cleanLine = line.replace(/[^A-Z0-9\s]/gi, '').trim();
-      if (cleanLine.length >= 4 && cleanLine.length <= 40 && !noisePattern.test(cleanLine)) {
-        if (/[A-Z]{3,}/i.test(cleanLine)) {
-          return cleanLine;
-        }
+    // Sort candidates by visual prominence: font height * width
+    candidates.sort((a, b) => {
+      const areaA = (a.bbox?.Height || 0.01) * (a.bbox?.Width || 0.1);
+      const areaB = (b.bbox?.Height || 0.01) * (b.bbox?.Width || 0.1);
+      return areaB - areaA;
+    });
+
+    const topCandidate = candidates[0];
+    let brandName = topCandidate.text.trim();
+
+    // Check if there is a secondary brand line close to it vertically (within 15% Y distance)
+    const topY = topCandidate.bbox?.Top ?? 0;
+    const secondaryCandidate = candidates.slice(1).find(c => {
+      const cY = c.bbox?.Top ?? 0;
+      return Math.abs(cY - topY) < 0.15 && c.text.trim() !== brandName;
+    });
+
+    if (secondaryCandidate) {
+      if ((topCandidate.bbox?.Top ?? 0) < (secondaryCandidate.bbox?.Top ?? 0)) {
+        brandName = `${topCandidate.text.trim()} ${secondaryCandidate.text.trim()}`;
+      } else {
+        brandName = `${secondaryCandidate.text.trim()} ${topCandidate.text.trim()}`;
       }
     }
 
-    return null;
+    return brandName.replace(/\s+/g, ' ').trim();
   }
 
   private async performOcrWithTimeout(
@@ -742,8 +747,8 @@ export class OcrPlateValidator implements Analyzer {
       const textToScan = `${rawText} ${filename}`;
       const bestMatch = this.normalizeAndFuzzyFixPlate(textToScan);
 
-      // Campaign brand: use AI result first, then fallback to keyword extraction
-      const campaignBrand = ocrResult.campaignBrand || this.extractCampaignBrand(rawText, filename);
+      // Campaign brand: computed dynamically via Computer Vision & AI layout analysis
+      const campaignBrand = ocrResult.campaignBrand || null;
 
       const isAiPowered = Boolean(ocrResult.sourceAI);
       const methodLabel = isAiPowered
