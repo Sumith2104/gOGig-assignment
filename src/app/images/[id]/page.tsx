@@ -440,7 +440,20 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {data.analysisResults?.map((result: any) => {
             const Icon = getCheckIcon(result.checkName);
-            const isPassed = result.passed;
+            const status: string = result.resultStatus || (result.passed ? 'NO_ISSUE_DETECTED' : 'ISSUE_DETECTED');
+
+            let badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-300';
+            let badgeText = 'NO ISSUE DETECTED';
+            if (status === 'ISSUE_DETECTED') {
+              badgeStyle = 'bg-rose-50 text-rose-800 border-rose-300';
+              badgeText = 'ISSUE DETECTED';
+            } else if (status === 'REVIEW_REQUIRED') {
+              badgeStyle = 'bg-amber-50 text-amber-900 border-amber-300';
+              badgeText = 'REVIEW REQUIRED';
+            } else if (status === 'ANALYZER_ERROR') {
+              badgeStyle = 'bg-slate-900 text-rose-300 border-slate-700';
+              badgeText = 'ANALYZER ERROR';
+            }
 
             return (
               <div
@@ -460,81 +473,28 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
                     </div>
                   </div>
 
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-extrabold flex items-center space-x-1 border ${
-                      isPassed
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : 'bg-rose-50 text-rose-700 border-rose-200'
-                    }`}
-                  >
-                    {isPassed ? (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Passed</span>
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle className="w-3.5 h-3.5" />
-                        <span>Flagged</span>
-                      </>
-                    )}
+                  <span className={`px-2.5 py-1 rounded-md text-[10px] font-black border ${badgeStyle}`}>
+                    {badgeText}
                   </span>
                 </div>
 
-                <div
-                  className={`p-3 rounded-xl text-xs font-medium border ${
-                    isPassed
-                      ? 'bg-emerald-50/50 text-emerald-800 border-emerald-200'
-                      : 'bg-rose-50/50 text-rose-800 border-rose-200'
-                  }`}
-                >
+                <div className="p-3 rounded-xl text-xs font-medium bg-slate-50 text-slate-800 border border-slate-200 space-y-1">
                   <div className="flex items-start space-x-2">
-                    <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                    <div>
-                      {result.checkName === 'blur_detection' && (
-                        <p>{isPassed ? 'Image is sharp with clear edge definitions.' : 'Image appears blurry or out of focus.'}</p>
-                      )}
-                      {result.checkName === 'brightness_analysis' && (
-                        <p>{isPassed ? 'Lighting and pixel luminance are within optimal range.' : 'Image lighting is too dark or overexposed.'}</p>
-                      )}
-                      {result.checkName === 'duplicate_detection' && (
-                        <p>{isPassed ? 'No perceptual duplicates found in database.' : 'Perceptually similar image already exists in database.'}</p>
-                      )}
-                      {result.checkName === 'ocr_plate_validation' && (
-                        <p>
-                          {isPassed
-                            ? `Extracted valid Indian vehicle plate: ${result.details?.normalizedPlate || 'Valid'}`
-                            : 'Indian vehicle number plate format could not be verified automatically. Ensure the license plate is clean and readable.'}
-                        </p>
-                      )}
-                      {result.checkName === 'dimension_validation' && (
-                        <p>{isPassed ? 'Image resolution and aspect ratio meet pipeline standards.' : 'Image dimensions or aspect ratio outside allowed bounds.'}</p>
-                      )}
-                      {result.checkName === 'metadata_analysis' && (
-                        <div>
-                          {result.details?.anomalies?.length > 0 ? (
-                            <ul className="list-disc list-inside space-y-1">
-                              {result.details.anomalies.map((a: string, idx: number) => (
-                                <li key={idx}>{a}</li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p>EXIF metadata intact with zero anomalies.</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    <Info className="w-4 h-4 shrink-0 mt-0.5 text-orange-600" />
+                    <p className="font-semibold leading-relaxed">
+                      {result.details?.evidence || result.details?.error || 'Analyzer executed successfully.'}
+                    </p>
                   </div>
                 </div>
 
                 <div className="space-y-1.5 pt-2 border-t border-slate-100 text-xs">
                   <div className="flex justify-between py-1 border-b border-slate-100">
                     <span className="text-slate-500 font-medium">Metric Score:</span>
-                    <span className="font-mono font-bold text-slate-900">{result.score}</span>
+                    <span className="font-mono font-bold text-slate-900">{result.score ?? 'N/A'}</span>
                   </div>
 
                   {Object.entries(result.details || {}).map(([key, val]: [string, any]) => {
-                    if (key === 'anomalies') return null;
+                    if (key === 'anomalies' || key === 'evidence') return null;
                     if (key === 'rawText' && result.details?.formatValid) return null;
                     const formattedVal = typeof val === 'object' ? JSON.stringify(val) : String(val);
                     const truncated = formattedVal.length > 35 ? formattedVal.substring(0, 32) + '...' : formattedVal;

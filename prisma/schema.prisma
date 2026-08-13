@@ -15,6 +15,14 @@ enum ProcessingStatus {
   FAILED
 }
 
+enum ResultStatus {
+  NO_ISSUE_DETECTED
+  ISSUE_DETECTED
+  UNABLE_TO_DETERMINE
+  REVIEW_REQUIRED
+  ANALYZER_ERROR
+}
+
 model Image {
   id             String           @id @default(uuid())
   originalName   String           @map("original_name")
@@ -42,15 +50,16 @@ model Image {
 }
 
 model AnalysisResult {
-  id         String   @id @default(uuid())
-  imageId    String   @map("image_id")
-  checkName  String   @map("check_name")
-  passed     Boolean
-  score      Float?
-  details    Json?
-  error      String?
-  durationMs Int?     @map("duration_ms")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id           String       @id @default(uuid())
+  imageId      String       @map("image_id")
+  checkName    String       @map("check_name")
+  resultStatus ResultStatus @default(NO_ISSUE_DETECTED) @map("result_status")
+  passed       Boolean      @default(true)
+  score        Float?
+  details      Json?
+  error        String?
+  durationMs   Int?         @map("duration_ms")
+  createdAt    DateTime     @default(now()) @map("created_at")
 
   image Image @relation(fields: [imageId], references: [id], onDelete: Cascade)
 

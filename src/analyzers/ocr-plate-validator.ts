@@ -522,38 +522,62 @@ export class OcrPlateValidator implements Analyzer {
         ? 'Hybrid Gemini 2.5 Flash Vision AI + CV Multi-Line Parser'
         : 'Tesseract.js Bumper Plate OCR + Multi-Token Heuristics';
 
+      const formatValid = bestMatch.isMatch;
+      const agreement = isAiPowered ? Boolean(bestMatch.normalized && ocrResult.text.replace(/[^A-Z0-9]/gi, '').includes(bestMatch.normalized)) : true;
+      const reviewRequired = !formatValid || !agreement;
+
+      let resultStatus: 'NO_ISSUE_DETECTED' | 'REVIEW_REQUIRED' | 'ISSUE_DETECTED' = 'NO_ISSUE_DETECTED';
+      if (!formatValid) {
+        resultStatus = 'ISSUE_DETECTED';
+      } else if (reviewRequired) {
+        resultStatus = 'REVIEW_REQUIRED';
+      }
+
       return {
         checkName: this.name,
-        passed: bestMatch.isMatch,
-        score: bestMatch.isMatch ? 1.0 : 0.0,
+        resultStatus,
+        passed: formatValid,
+        score: formatValid ? (agreement ? 1.0 : 0.8) : 0.0,
         details: {
           rawText,
           normalizedPlate: bestMatch.normalized || null,
           campaignBrand: ocrResult.campaignBrand || null,
-          formatValid: bestMatch.isMatch,
+          formatValid,
+          aiVisualVerification: isAiPowered,
+          agreement,
+          reviewRequired,
           fixedByHeuristic: bestMatch.fixedByHeuristic,
           regexPattern: '^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$',
           method: methodLabel,
           sourceAI: isAiPowered,
-          boundingBox: bestMatch.isMatch ? ocrResult.boundingBox : undefined,
+          boundingBox: formatValid ? ocrResult.boundingBox : undefined,
+          evidence: formatValid
+            ? `Extracted normalized plate '${bestMatch.normalized}' matching standard Indian vehicle regex format.`
+            : `Extracted text '${rawText}' did not pass standard Indian vehicle plate regex format. Review required.`,
         },
       };
     } catch (error) {
       const filename = imagePath.split(/[/\\]/).pop() || '';
       const fallbackRes = this.normalizeAndFuzzyFixPlate(filename);
+      const formatValid = fallbackRes.isMatch;
 
       return {
         checkName: this.name,
-        passed: fallbackRes.isMatch,
-        score: fallbackRes.isMatch ? 0.5 : 0.0,
+        resultStatus: formatValid ? 'REVIEW_REQUIRED' : 'ANALYZER_ERROR',
+        passed: formatValid,
+        score: formatValid ? 0.5 : 0.0,
         details: {
           rawText: filename,
           normalizedPlate: fallbackRes.normalized || null,
-          formatValid: fallbackRes.isMatch,
+          formatValid,
+          aiVisualVerification: false,
+          agreement: false,
+          reviewRequired: true,
           fixedByHeuristic: fallbackRes.fixedByHeuristic,
           method: 'Fast Pattern Scan (OCR Fallback)',
           fallbackExecuted: true,
           error: error instanceof Error ? error.message : 'OCR Engine Timeout/Fallback',
+          evidence: 'OCR execution encountered error or timeout. Fallback scan performed. Review required.',
         },
       };
     }

@@ -24,9 +24,11 @@ export class DimensionValidator implements Analyzer {
     const validAspectRatio = aspectRatio >= this.minAspectRatio && aspectRatio <= this.maxAspectRatio;
 
     const passed = meetsMinimum && meetsMaximum && validAspectRatio;
+    const resultStatus = passed ? 'NO_ISSUE_DETECTED' : 'ISSUE_DETECTED';
 
     return Promise.resolve({
       checkName: this.name,
+      resultStatus,
       passed,
       score: megaPixels,
       details: {
@@ -42,6 +44,9 @@ export class DimensionValidator implements Analyzer {
           maxResolution: `${this.maxWidth}x${this.maxHeight}`,
           aspectRatioRange: `${this.minAspectRatio} - ${this.maxAspectRatio}`,
         },
+        evidence: passed
+          ? `Image resolution ${width}x${height} (${megaPixels} MP) meets pipeline dimension bounds.`
+          : `Image resolution ${width}x${height} outside allowed pipeline resolution bounds.`,
       },
     });
   }

@@ -26,6 +26,10 @@ interface ImageItem {
   failureReason: string | null;
   summary: {
     totalChecks: number;
+    completed?: number;
+    issuesDetected?: number;
+    analyzerErrors?: number;
+    reviewRequired?: boolean;
     passed: number;
     score: number;
     campaignBrand?: string | null;
@@ -254,9 +258,23 @@ export default function DashboardPage() {
                     </td>
                     <td className="py-4 px-3 text-xs font-bold text-slate-900">
                       {img.status === 'COMPLETED' ? (
-                        <span className="text-emerald-700 font-extrabold">
-                          {img.summary.passed} / {img.summary.totalChecks} Checks
-                        </span>
+                        <div className="flex flex-col space-y-0.5">
+                          <span className="text-emerald-700 font-extrabold text-xs">
+                            {img.summary.completed || 6} / {img.summary.totalChecks || 6} Executed
+                          </span>
+                          {img.summary.issuesDetected ? (
+                            <span className="text-[10px] text-rose-600 font-bold">
+                              {img.summary.issuesDetected} Issue(s) Detected
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-medium">Zero Issues Detected</span>
+                          )}
+                          {img.summary.reviewRequired && (
+                            <span className="text-[10px] font-black text-amber-600 uppercase tracking-wide">
+                              Review Required
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-slate-400">--</span>
                       )}
