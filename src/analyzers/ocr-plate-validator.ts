@@ -172,9 +172,12 @@ export class OcrPlateValidator implements Analyzer {
     const candidateModels = ['gemini-2.5-flash'];
 
     const base64Image = buffer.toString('base64');
-    const promptText = `Analyze this vehicle image and find the vehicle registration number / license plate AND any prominent outdoor campaign advertisement brand name. Look carefully at bumper plates, yellow commercial 2-line plates (e.g. auto-rickshaws with line 1 "MH12K" and line 2 "R1145" -> return "MH12KR1145", "HR55U" + "0390" -> "HR55U0390"), white plates, and rear/side body numbers. Return ONLY a JSON object with keys:
-"plateNumber": normalized uppercase string without spaces/hyphens (e.g. "MH12KR1145", "HR55U0390", "TN05BT5754", "MH12NW8556"), or null if no plate present,
-"campaignBrand": prominent advertisement brand name, slogan, or campaign title visible on the vehicle hood wrap/banner (e.g. "ARENA ANIMATION", "PUNE-FC ROAD 7755900813"), or null if none,
+    const promptText = `Scan the provided image and evaluate all the visible text.
+Identify and output only the primary company or brand name mentioned in the advertisement, along with the vehicle license plate number.
+
+Return ONLY a JSON object with keys:
+"campaignBrand": primary company or brand name mentioned in the advertisement (e.g. "ARENA ANIMATION", "SriSri Tattva", "Dr Agarwals Eye Hospital", "CMWSSB"), or null if none,
+"plateNumber": normalized uppercase string without spaces/hyphens (e.g. "MH12NW8556", "MH12KR1145", "TN05BT5754", "WB73E9248"), or null if no plate present,
 "rawText": unmodified exact printed text,
 "boundingBox": object with keys "leftPercent", "topPercent", "widthPercent", "heightPercent" (numbers between 0 and 100 representing bounding box location),
 "confidence": confidence score between 0.0 and 1.0,
@@ -202,11 +205,11 @@ export class OcrPlateValidator implements Analyzer {
 
     for (const modelName of candidateModels) {
       try {
-        logger.info({ modelName }, 'Invoking Gemini Vision AI for vehicle license plate extraction...');
+        logger.info({ modelName }, 'Invoking Gemini Vision AI for primary brand and license plate extraction...');
         const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2500); // 2.5s fast timeout
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8.0s timeout for Gemini Vision AI
 
         const response = await fetch(requestUrl, {
           method: 'POST',
@@ -530,7 +533,7 @@ Compare BOTH the image and the extracted text to identify the primary corporate 
       return null;
     }
 
-    const noiseRegex = /^[0-9\s\-\.]+$|MH[0-9]|TN[0-9]|WB[0-9]|KA[0-9]|DL[0-9]|KL[0-9]|HR[0-9]|UP[0-9]|GJ[0-9]|COMPACT|IND|CNG|DIESEL|PETROL|CALL|TEL|PHONE|WWW|HTTP|EMAIL|PUNE|CITY|STOP|PERMIT|SPEED|ALL INDIA|APPLY|TERMS|REDMI|CAMERA|PHOTO|NOTE|MI DUAL|PRO|CARE|FOOD|HEALTH|GLOBAL|ALUMNI|CAREERS|DESIGN|CONTENT|RECRUITERS\b/i;
+    const noiseRegex = /^[0-9\s\-\.]+$|[^a-zA-Z0-9\s\-\.&]|MH[0-9]|TN[0-9]|WB[0-9]|KA[0-9]|DL[0-9]|KL[0-9]|HR[0-9]|UP[0-9]|GJ[0-9]|COMPACT|IND|CNG|DIESEL|PETROL|CALL|TEL|PHONE|WWW|HTTP|EMAIL|PUNE|CITY|STOP|PERMIT|SPEED|ALL INDIA|APPLY|TERMS|REDMI|CAMERA|PHOTO|NOTE|MI DUAL|PRO|CARE|FOOD|HEALTH|GLOBAL|ALUMNI|CAREERS|DESIGN|CONTENT|RECRUITERS|CREATIVITY|LEADER|LEARN\b/i;
 
     // 1. Filter text lines located in upper 70% of the ad wrap
     const candidates = lineBoxes.filter(l => {
@@ -580,25 +583,7 @@ Compare BOTH the image and the extracted text to identify the primary corporate 
       const width = metadata.width || 800;
       const height = metadata.height || 800;
 
-      // Tier 1: AWS Rekognition DetectText (Primary: Fast ~1s, 100% SLA, Bounding Box Precise)
-      const rekognitionResult = await this.performAwsRekognitionOCR(buffer, width, height);
-      if (rekognitionResult && rekognitionResult.plateNumber) {
-        const bbox = rekognitionResult.boundingBox || {
-          left: Math.floor(width * 0.40),
-          top: Math.floor(height * 0.62),
-          width: Math.floor(width * 0.50),
-          height: Math.floor(height * 0.25),
-        };
-        return {
-          text: rekognitionResult.rawText || rekognitionResult.plateNumber,
-          boundingBox: bbox,
-          sourceAI: true,
-          confidence: rekognitionResult.confidence,
-          campaignBrand: rekognitionResult.campaignBrand || null,
-        };
-      }
-
-      // Tier 2: Gemini Vision AI (Fallback)
+      // Tier 1: Google Gemini Vision AI (Primary: Evaluate image & visible text, extract primary brand name & license plate)
       const geminiResult = await this.performGeminiVisionOCR(buffer, width, height);
       if (geminiResult && geminiResult.plateNumber) {
         const bbox = geminiResult.boundingBox || {
@@ -613,6 +598,24 @@ Compare BOTH the image and the extracted text to identify the primary corporate 
           sourceAI: true,
           confidence: geminiResult.confidence,
           campaignBrand: geminiResult.campaignBrand || null,
+        };
+      }
+
+      // Tier 2: AWS Rekognition DetectText (Fallback)
+      const rekognitionResult = await this.performAwsRekognitionOCR(buffer, width, height);
+      if (rekognitionResult && rekognitionResult.plateNumber) {
+        const bbox = rekognitionResult.boundingBox || {
+          left: Math.floor(width * 0.40),
+          top: Math.floor(height * 0.62),
+          width: Math.floor(width * 0.50),
+          height: Math.floor(height * 0.25),
+        };
+        return {
+          text: rekognitionResult.rawText || rekognitionResult.plateNumber,
+          boundingBox: bbox,
+          sourceAI: true,
+          confidence: rekognitionResult.confidence,
+          campaignBrand: rekognitionResult.campaignBrand || null,
         };
       }
 
