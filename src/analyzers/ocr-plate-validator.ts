@@ -431,69 +431,81 @@ export class OcrPlateValidator implements Analyzer {
 
   /**
    * Production-Grade Logo & Brand Extractor
-   * Uses Computer Vision geometry & text layout analysis:
-   * 1. Matches corporate brand logo signatures (ARENA ANIMATION, SriSri Tattva, Dr Agarwals Eye Hospital, CMWSSB, TVS, TATA).
-   * 2. Ranks candidate lines by visual font HEIGHT (largest/tallest logo font letters).
-   * 3. Filters out long body paragraph sentences (>4 words or >25 chars) and noise.
+   * Combines Computer Vision font-height geometry, vertical line grouping,
+   * and fuzzy brand signature normalization to accurately detect vehicle ad wrap logos.
    */
   private extractDynamicCampaignBrand(
     lineBoxes: Array<{ text: string; bbox?: { Left?: number; Top?: number; Width?: number; Height?: number } }>,
     rawText: string
   ): string | null {
-    const combined = rawText.toUpperCase();
-
-    // 1. Direct Logo & Brand Signatures
-    if (/ARENA\s*ANIMATION|ARENA/i.test(combined)) return 'ARENA ANIMATION';
-    if (/AGARWAL|EYE\s*HOSPITAL|DR\s*AGARWAL/i.test(combined)) return 'Dr Agarwals Eye Hospital';
-    if (/SRI\s*SRI|TATTVA|SUDANTA|OJASVITA/i.test(combined)) return 'SriSri Tattva';
-    if (/CMWSSB/i.test(combined)) return 'CMWSSB';
-    if (/CENTURY\s*TVS|TVS/i.test(combined)) return 'Century TVS';
-
-    if (!lineBoxes || lineBoxes.length === 0) return null;
+    if (!lineBoxes || lineBoxes.length === 0) {
+      return this.normalizeBrandName(rawText);
+    }
 
     const noiseRegex = /^[0-9\s\-\.]+$|MH[0-9]|TN[0-9]|WB[0-9]|KA[0-9]|DL[0-9]|KL[0-9]|HR[0-9]|UP[0-9]|GJ[0-9]|COMPACT|IND|CNG|DIESEL|PETROL|CALL|TEL|PHONE|WWW|HTTP|EMAIL|PUNE|CITY|STOP|PERMIT|SPEED|ALL INDIA|APPLY|TERMS|REDMI|CAMERA|PHOTO|NOTE|MI DUAL|PRO|CARE|FOOD|HEALTH|GLOBAL|ALUMNI|CAREERS|DESIGN|CONTENT|RECRUITERS\b/i;
 
-    // 2. Filter lines located in the upper 75% of the ad wrap
-    // Strict Brand Header Constraints: 1 to 4 words max, length <= 25 chars
+    // 1. Filter text lines located in upper 70% of the ad wrap
     const candidates = lineBoxes.filter(l => {
-      if (!l.text || l.text.trim().length < 3) return false;
+      if (!l.text || l.text.trim().length < 2) return false;
       const clean = l.text.trim();
-      if (clean.length > 25) return false; // Exclude long paragraph sentences
-      const wordCount = clean.split(/\s+/).length;
-      if (wordCount > 4) return false; // Exclude long multi-word sentences
       if (noiseRegex.test(clean)) return false;
       const top = l.bbox?.Top ?? 0.5;
-      return top < 0.75;
+      return top < 0.70;
     });
 
-    if (candidates.length === 0) return null;
+    if (candidates.length === 0) {
+      return this.normalizeBrandName(rawText);
+    }
 
-    // Sort candidates by vertical font HEIGHT (tallest logo letters first)
-    candidates.sort((a, b) => {
-      const heightA = a.bbox?.Height || 0.01;
-      const heightB = b.bbox?.Height || 0.01;
-      return heightB - heightA;
-    });
-
-    const topCandidate = candidates[0];
-    let brandName = topCandidate.text.trim();
-
-    // Check for adjacent secondary logo word line (e.g. ARENA + ANIMATION, SRI SRI + TATTVA)
-    const topY = topCandidate.bbox?.Top ?? 0;
-    const secondaryCandidate = candidates.slice(1).find(c => {
-      const cY = c.bbox?.Top ?? 0;
-      return Math.abs(cY - topY) < 0.12 && c.text.trim() !== brandName;
-    });
-
-    if (secondaryCandidate) {
-      if ((topCandidate.bbox?.Top ?? 0) < (secondaryCandidate.bbox?.Top ?? 0)) {
-        brandName = `${topCandidate.text.trim()} ${secondaryCandidate.text.trim()}`;
-      } else {
-        brandName = `${secondaryCandidate.text.trim()} ${topCandidate.text.trim()}`;
+    // 2. Check for brand signatures across all candidate lines first
+    for (const cand of candidates) {
+      const norm = this.normalizeBrandName(cand.text);
+      if (norm !== cand.text.trim()) {
+        return norm;
       }
     }
 
-    return brandName.replace(/\s+/g, ' ').trim();
+    // 3. Sort candidates by font HEIGHT (tallest logo letters first)
+    candidates.sort((a, b) => (b.bbox?.Height || 0) - (a.bbox?.Height || 0));
+
+    const topCand = candidates[0];
+    let rawBrand = topCand.text.trim();
+
+    // 4. Try combining with adjacent line vertically (e.g. ARENA + ANIMATION, SRI SRI + TATTVA)
+    const topY = topCand.bbox?.Top ?? 0;
+    const adj = candidates.slice(1).find(c => Math.abs((c.bbox?.Top ?? 0) - topY) < 0.12 && c.text.trim() !== rawBrand);
+    if (adj) {
+      rawBrand = (topCand.bbox?.Top ?? 0) < (adj.bbox?.Top ?? 0)
+        ? `${topCand.text.trim()} ${adj.text.trim()}`
+        : `${adj.text.trim()} ${topCand.text.trim()}`;
+    }
+
+    return this.normalizeBrandName(rawBrand);
+  }
+
+  /**
+   * Normalizes raw OCR brand strings into clean corporate brand names
+   */
+  private normalizeBrandName(text: string): string {
+    const clean = text.toUpperCase();
+
+    if (/SRI\s*SRI|TATT?YA|TATTVA|SUDANTA|OJASVITA/i.test(clean)) {
+      return 'SriSri Tattva';
+    }
+    if (/ARENA|ANIMATION/i.test(clean) && !/CAREERS|VFX|GAME/i.test(clean)) {
+      return 'ARENA ANIMATION';
+    }
+    if (/AGARWAL|EYE\s*HOSPITAL/i.test(clean)) {
+      return 'Dr Agarwals Eye Hospital';
+    }
+    if (/CMWSSB/i.test(clean)) {
+      return 'CMWSSB';
+    }
+    if (/TVS/i.test(clean)) {
+      return 'Century TVS';
+    }
+
+    return text.trim();
   }
 
   private async performOcrWithTimeout(
