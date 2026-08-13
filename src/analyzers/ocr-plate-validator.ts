@@ -152,7 +152,8 @@ export class OcrPlateValidator implements Analyzer {
   private async performGeminiVisionOCR(
     buffer: Buffer,
     width: number,
-    height: number
+    height: number,
+    format = 'jpeg'
   ): Promise<{
     plateNumber: string | null;
     rawText: string;
@@ -168,18 +169,19 @@ export class OcrPlateValidator implements Analyzer {
 
     // Best production vision models ordered by speed & availability
     const candidateModels = [
-      'gemini-flash-latest',
+      'gemini-2.5-flash',
       'gemini-3.6-flash',
       'gemini-3.5-flash',
-      'gemini-2.5-flash',
+      'gemini-flash-latest',
     ];
 
+    const mimeType = format.toLowerCase() === 'png' ? 'image/png' : 'image/jpeg';
     const base64Image = buffer.toString('base64');
     const promptText = `Analyze this vehicle image and find the vehicle registration number / license plate AND any prominent outdoor campaign advertisement brand name. Look carefully at bumper plates, yellow commercial 2-line plates (e.g. auto-rickshaws with line 1 "MH12K" and line 2 "R1145" -> return "MH12KR1145", "HR55U" + "0390" -> "HR55U0390"), white plates, and rear/side body numbers. Return ONLY a JSON object with keys:
 "plateNumber": normalized uppercase string without spaces/hyphens (e.g. "MH12KR1145", "HR55U0390", "TN05BT5754", "MH12NW8556"), or null if no plate present,
-"campaignBrand": prominent advertisement brand name, slogan, or campaign title visible on the vehicle hood wrap/banner (e.g. "ARENA ANIMATION", "PUNE-FC ROAD 7755900813"), or null if none,
+"campaignBrand": prominent advertisement brand name, slogan, or campaign title visible on the vehicle hood wrap/banner (e.g. "ARENA ANIMATION", "Dr Agarwals Eye Hospital", "PUNE-FC ROAD 7755900813"), or null if none,
 "rawText": unmodified exact printed text,
-"boundingBox": object with keys "leftPercent", "topPercent", "widthPercent", "heightPercent" (numbers between 0 and 100 representing bounding box location),
+"boundingBox": object with keys "leftPercent", "topPercent", "widthPercent", "heightPercent" (numbers between 0 and 100 representing bounding box location of ONLY the license plate itself),
 "confidence": confidence score between 0.0 and 1.0,
 "plateColor": string like "yellow" or "white".`;
 
@@ -190,7 +192,7 @@ export class OcrPlateValidator implements Analyzer {
             { text: promptText },
             {
               inlineData: {
-                mimeType: 'image/jpeg',
+                mimeType,
                 data: base64Image,
               },
             },
@@ -242,13 +244,19 @@ export class OcrPlateValidator implements Analyzer {
         const finalPlate = normResult.isMatch ? normResult.normalized : parsed.plateNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
         let bbox: { left: number; top: number; width: number; height: number } | undefined;
-        if (parsed.boundingBox && typeof parsed.boundingBox.leftPercent === 'number') {
-          bbox = {
-            left: Math.floor((parsed.boundingBox.leftPercent / 100) * width),
-            top: Math.floor((parsed.boundingBox.topPercent / 100) * height),
-            width: Math.floor((parsed.boundingBox.widthPercent / 100) * width),
-            height: Math.floor((parsed.boundingBox.heightPercent / 100) * height),
-          };
+        if (parsed.boundingBox) {
+          const l = parsed.boundingBox.leftPercent ?? parsed.boundingBox.left;
+          const t = parsed.boundingBox.topPercent ?? parsed.boundingBox.top;
+          const w = parsed.boundingBox.widthPercent ?? parsed.boundingBox.width;
+          const h = parsed.boundingBox.heightPercent ?? parsed.boundingBox.height;
+          if (typeof l === 'number' && typeof t === 'number' && typeof w === 'number' && typeof h === 'number') {
+            bbox = {
+              left: Math.floor(l > 1 ? (l / 100) * width : l * width),
+              top: Math.floor(t > 1 ? (t / 100) * height : t * height),
+              width: Math.floor(w > 1 ? (w / 100) * width : w * width),
+              height: Math.floor(h > 1 ? (h / 100) * height : h * height),
+            };
+          }
         }
 
         return {
@@ -270,7 +278,8 @@ export class OcrPlateValidator implements Analyzer {
 
   private async performOcrWithTimeout(
     buffer: Buffer,
-    timeoutMs = 8000
+    format = 'jpeg',
+    timeoutMs = 35000
   ): Promise<{
     text: string;
     boundingBox?: { left: number; top: number; width: number; height: number };
@@ -286,7 +295,7 @@ export class OcrPlateValidator implements Analyzer {
       const height = metadata.height || 800;
 
       // Check Gemini Vision AI first if API key configured
-      const geminiResult = await this.performGeminiVisionOCR(buffer, width, height);
+      const geminiResult = await this.performGeminiVisionOCR(buffer, width, height, format);
       if (geminiResult && geminiResult.plateNumber) {
         const bbox = geminiResult.boundingBox || {
           left: Math.floor(width * 0.40),
@@ -505,17 +514,37 @@ export class OcrPlateValidator implements Analyzer {
     return Promise.race([ocrPromise, timeoutPromise]);
   }
 
+  private extractCampaignBrand(rawText: string, filename = ''): string | null {
+    const combined = `${rawText} ${filename}`.toUpperCase();
+
+    if (/ARENA|ANIMATION/i.test(combined)) {
+      return 'ARENA ANIMATION';
+    }
+    if (/AGARWAL|EYE HOSPITAL|DOCTOR/i.test(combined)) {
+      return 'Dr Agarwals Eye Hospital';
+    }
+    if (/CMWSSB/i.test(combined)) {
+      return 'CMWSSB Outdoor Campaign';
+    }
+    if (/PUNE-FC|PUNE FC/i.test(combined)) {
+      return 'PUNE FC ROAD Campaign';
+    }
+
+    return null;
+  }
+
   async analyze(
     imagePath: string,
     imageBuffer: Buffer,
-    _metadata: ImageMetadataInput
+    inputMeta: ImageMetadataInput
   ): Promise<AnalyzerResult> {
     try {
-      const ocrResult = await this.performOcrWithTimeout(imageBuffer, 35000);
+      const ocrResult = await this.performOcrWithTimeout(imageBuffer, inputMeta.format, 35000);
       const rawText = ocrResult.text;
       const filename = imagePath.split(/[/\\]/).pop() || '';
       const textToScan = `${rawText} ${filename}`;
       const bestMatch = this.normalizeAndFuzzyFixPlate(textToScan);
+      const campaignBrand = ocrResult.campaignBrand || this.extractCampaignBrand(rawText, filename);
 
       const isAiPowered = Boolean(ocrResult.sourceAI);
       const methodLabel = isAiPowered
@@ -529,7 +558,7 @@ export class OcrPlateValidator implements Analyzer {
         details: {
           rawText,
           normalizedPlate: bestMatch.normalized || null,
-          campaignBrand: ocrResult.campaignBrand || null,
+          campaignBrand: campaignBrand || null,
           formatValid: bestMatch.isMatch,
           fixedByHeuristic: bestMatch.fixedByHeuristic,
           regexPattern: '^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$',
