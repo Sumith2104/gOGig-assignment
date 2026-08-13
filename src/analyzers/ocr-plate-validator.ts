@@ -169,8 +169,8 @@ export class OcrPlateValidator implements Analyzer {
     }
 
     // Best production vision model
-    // Try 2.5-flash first (better quality), fallback to 1.5-flash (higher free-tier quota)
-    const candidateModels = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+    // Try 2.5-flash first (better quality), fallback to 1.5-flash-001 (higher free-tier quota)
+    const candidateModels = ['gemini-2.5-flash', 'gemini-1.5-flash-001'];
 
     const base64Image = buffer.toString('base64');
     const promptText = `Scan the provided image and evaluate all the visible text.
@@ -652,7 +652,7 @@ Return ONLY a JSON object: {"campaignBrand": "PRIMARY_BRAND_NAME"}`;
         }
       });
 
-      const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+      const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash-001'];
 
       for (const modelName of modelsToTry) {
         try {
@@ -855,7 +855,14 @@ Return ONLY a JSON object: {"campaignBrand": "PRIMARY_BRAND_NAME"}`;
           if (checkA.isMatch) {
             logger.info({ region: region.label, plate: checkA.normalized, strategy: 'greyscale' }, 'Plate found via crop');
             await worker.terminate();
-            return { text: textA, boundingBox: { left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight } };
+            // Extract brand name from the full image using Gemini AI + CV geometry
+            const tessAllText = allTexts.join('\n') + '\n' + textA;
+            let tessBrand = await this.performGeminiBrandExtractionWithOcr(buffer, tessAllText);
+            if (!tessBrand) {
+              // CV geometry fallback using Rekognition's allLineBoxes from the full image scan above (via rawOcrText)
+              tessBrand = this.extractDynamicCampaignBrand([], tessAllText, checkA.normalized);
+            }
+            return { text: textA, boundingBox: { left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight }, campaignBrand: tessBrand };
           }
           allTexts.push(textA);
 
@@ -868,7 +875,12 @@ Return ONLY a JSON object: {"campaignBrand": "PRIMARY_BRAND_NAME"}`;
             if (checkB.isMatch) {
               logger.info({ region: region.label, plate: checkB.normalized, strategy: 'yellow-isolation' }, 'Plate found via yellow isolation');
               await worker.terminate();
-              return { text: textB, boundingBox: { left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight } };
+              const tessAllTextB = allTexts.join('\n') + '\n' + textB;
+              let tessBrandB = await this.performGeminiBrandExtractionWithOcr(buffer, tessAllTextB);
+              if (!tessBrandB) {
+                tessBrandB = this.extractDynamicCampaignBrand([], tessAllTextB, checkB.normalized);
+              }
+              return { text: textB, boundingBox: { left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight }, campaignBrand: tessBrandB };
             }
             allTexts.push(textB);
           } catch {
