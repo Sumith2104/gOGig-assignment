@@ -294,6 +294,75 @@ export default function UploadPage() {
             </div>
           </div>
 
+          {/* Real-Time Step-by-Step Pipeline Loader Card */}
+          {processingStatus?.status !== 'COMPLETED' && processingStatus?.status !== 'FAILED' && (
+            <div className="p-5 rounded-2xl bg-slate-900 text-white border border-slate-800 shadow-lg space-y-4">
+              {(() => {
+                const passedCount = processingStatus?.analysisResults?.length || 0;
+                let currentStage = 'Stage 1/6: File Ingestion & Metadata Inspection';
+                let estRemaining = '~7s remaining';
+                let progressPct = Math.min(95, Math.max(10, (passedCount / 6) * 100 || (elapsedSeconds * 12)));
+
+                if (passedCount >= 5) {
+                  currentStage = 'Stage 6/6: Compositing Computer Vision Feature Map...';
+                  estRemaining = '~1s remaining';
+                  progressPct = 92;
+                } else if (passedCount >= 4) {
+                  currentStage = 'Stage 5/6: Invoking Gemini Vision AI & License Plate OCR...';
+                  estRemaining = '~2s remaining';
+                  progressPct = 78;
+                } else if (passedCount >= 3) {
+                  currentStage = 'Stage 4/6: 64-bit Perceptual Hash Duplicate Scanning...';
+                  estRemaining = '~4s remaining';
+                  progressPct = 60;
+                } else if (passedCount >= 2) {
+                  currentStage = 'Stage 3/6: Pixel Brightness & Exposure Sampling...';
+                  estRemaining = '~5s remaining';
+                  progressPct = 42;
+                } else if (passedCount >= 1) {
+                  currentStage = 'Stage 2/6: Blur & Laplacian Edge Contrast Analysis...';
+                  estRemaining = '~6s remaining';
+                  progressPct = 25;
+                }
+
+                return (
+                  <>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                      <div className="flex items-center space-x-2.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+                        <span className="text-xs font-black text-amber-400 tracking-wide uppercase">
+                          {currentStage}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-3 text-xs font-mono font-bold text-slate-300">
+                        <span className="text-emerald-400">Elapsed: {elapsedSeconds}s</span>
+                        <span>•</span>
+                        <span className="text-orange-400 font-extrabold">{estRemaining}</span>
+                      </div>
+                    </div>
+
+                    {/* Animated Progress Bar */}
+                    <div className="space-y-1.5">
+                      <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-700">
+                        <div
+                          className="bg-gradient-to-r from-orange-500 via-amber-400 to-emerald-400 h-full rounded-full transition-all duration-500 shadow-sm"
+                          style={{ width: `${progressPct}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[10px] font-mono text-slate-400 font-bold">
+                        <span>Ingestion</span>
+                        <span>Blur & Exposure</span>
+                        <span>pHash Duplicate</span>
+                        <span>Vision AI OCR</span>
+                        <span>CV Map</span>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
           <div className="space-y-4">
             <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-700">Live Check Lifecycle</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -310,25 +379,39 @@ export default function UploadPage() {
                 return (
                   <div
                     key={checkName}
-                    className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between"
+                    className={`p-3.5 rounded-xl border flex items-center justify-between transition-all ${
+                      res
+                        ? res.passed
+                          ? 'bg-emerald-50/50 border-emerald-200'
+                          : 'bg-rose-50/50 border-rose-200'
+                        : 'bg-slate-50 border-slate-200'
+                    }`}
                   >
                     <div className="flex items-center space-x-3">
                       {res ? (
                         res.passed ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                         ) : (
-                          <AlertCircle className="w-4 h-4 text-rose-600" />
+                          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
                         )
                       ) : (
-                        <Clock className="w-4 h-4 text-slate-400 animate-spin" />
+                        <Clock className="w-4 h-4 text-amber-500 animate-spin shrink-0" />
                       )}
                       <span className="text-xs font-bold text-slate-900 capitalize">
                         {checkName.replace(/_/g, ' ')}
                       </span>
                     </div>
 
-                    <span className="text-[11px] font-bold text-slate-900">
-                      {res ? (res.passed ? 'PASSED' : 'FLAGGED') : 'Pending'}
+                    <span className="text-[11px] font-bold">
+                      {res ? (
+                        res.passed ? (
+                          <span className="text-emerald-700 font-black">PASSED</span>
+                        ) : (
+                          <span className="text-rose-700 font-black">FLAGGED</span>
+                        )
+                      ) : (
+                        <span className="text-slate-400 italic">Processing...</span>
+                      )}
                     </span>
                   </div>
                 );
