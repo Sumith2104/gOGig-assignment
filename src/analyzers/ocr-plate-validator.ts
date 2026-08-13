@@ -389,33 +389,42 @@ Return ONLY a JSON object with keys:
               const bb1 = matchingLine.bbox;
               const region = pass.cropRegion || { left: 0, top: 0, width, height };
 
-              // Find Line 2 for 2-line auto-rickshaw plates (e.g. Line 1 "MH12N", Line 2 "W8556" / "BT5754" / "R1145")
+              // Find Line 2 only if it is immediately below Line 1 (strict: within 0.06 of Top coord)
+              // Auto-rickshaw 2-line plates: "MH12N" on line1, "W8556" on line2 — they are very close
               const line2 = lineBoxes.find(l =>
                 l !== matchingLine &&
-                Math.abs((l.bbox?.Left || 0) - (bb1.Left || 0)) < 0.20 &&
+                Math.abs((l.bbox?.Left || 0) - (bb1.Left || 0)) < 0.15 &&
                 (l.bbox?.Top || 0) > (bb1.Top || 0) &&
-                ((l.bbox?.Top || 0) - (bb1.Top || 0)) < 0.15
+                ((l.bbox?.Top || 0) - (bb1.Top || 0)) < 0.06
               );
 
               const b1Top = bb1.Top || 0;
-              const b1Bottom = b1Top + (bb1.Height || 0.04);
-              const b2Bottom = line2?.bbox ? ((line2.bbox.Top || 0) + (line2.bbox.Height || 0.04)) : b1Bottom;
-              const totalHeightRelative = Math.max(0.04, b2Bottom - b1Top);
+              const b1H = bb1.Height || 0.03;
 
-              const maxRelWidth = Math.max(bb1.Width || 0.1, line2?.bbox?.Width || bb1.Width || 0.1);
+              // Use line2 bottom if very close, otherwise use just line1 height
+              const b2Bottom = line2?.bbox
+                ? ((line2.bbox.Top || 0) + (line2.bbox.Height || b1H))
+                : (b1Top + b1H);
 
-              bestBbox = {
-                left: region.left + Math.floor((bb1.Left || 0) * region.width),
-                top: region.top + Math.floor(b1Top * region.height),
-                width: Math.min(region.width, Math.floor(maxRelWidth * region.width * 1.1)),
-                height: Math.min(region.height, Math.floor(totalHeightRelative * region.height * 1.25)),
-              };
+              // Hard cap: never taller than 2.5x the single line height to avoid runaway boxes
+              const maxAllowedRelH = b1H * 2.5;
+              const totalRelH = Math.min(b2Bottom - b1Top, maxAllowedRelH);
+
+              const maxRelWidth = Math.max(bb1.Width || 0.08, line2?.bbox?.Width || bb1.Width || 0.08);
+
+              // Convert relative coords back to absolute pixel coords
+              const absLeft = region.left + Math.floor((bb1.Left || 0) * region.width);
+              const absTop = region.top + Math.floor(b1Top * region.height);
+              const absWidth = Math.min(Math.floor(region.width * 0.5), Math.floor(maxRelWidth * region.width * 1.05));
+              const absHeight = Math.min(Math.floor(region.height * 0.12), Math.floor(totalRelH * region.height * 1.1));
+
+              bestBbox = { left: absLeft, top: absTop, width: absWidth, height: Math.max(20, absHeight) };
             } else if (pass.cropRegion) {
               bestBbox = {
                 left: Math.floor(width * 0.35),
                 top: pass.cropRegion.top + Math.floor(pass.cropRegion.height * 0.4),
                 width: Math.floor(width * 0.30),
-                height: Math.floor(height * 0.08),
+                height: Math.floor(height * 0.06),
               };
             }
             break;
