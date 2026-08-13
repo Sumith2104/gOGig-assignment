@@ -478,14 +478,66 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
                   </span>
                 </div>
 
-                <div className="p-3 rounded-xl text-xs font-medium bg-slate-50 text-slate-800 border border-slate-200 space-y-1">
-                  <div className="flex items-start space-x-2">
-                    <Info className="w-4 h-4 shrink-0 mt-0.5 text-orange-600" />
-                    <p className="font-semibold leading-relaxed">
-                      {result.details?.evidence || result.details?.error || 'Analyzer executed successfully.'}
-                    </p>
-                  </div>
-                </div>
+                {/* Dynamic Smart Evidence & Issue Explanation Banner */}
+                {(() => {
+                  let explanation = result.details?.evidence || result.details?.error;
+
+                  if (!explanation || explanation === 'Analyzer executed successfully.') {
+                    if (result.checkName === 'duplicate_detection') {
+                      explanation = result.details?.isDuplicate
+                        ? `Perceptual duplicate match detected: Closest match '${result.details?.closestMatchName || 'another image'}' (Hamming Distance: ${result.details?.hammingDistance ?? 0} bits)`
+                        : 'Zero perceptual duplicates found in database.';
+                    } else if (result.checkName === 'metadata_analysis') {
+                      const anomalies = result.details?.anomalies;
+                      explanation = Array.isArray(anomalies) && anomalies.length > 0
+                        ? `Anomalies detected: ${anomalies.join('; ')}`
+                        : 'EXIF metadata header absent (common for compressed web uploads / messaging apps).';
+                    } else if (result.checkName === 'blur_detection') {
+                      explanation = result.passed
+                        ? `Image is sharp with clear edge definitions (Laplacian Stdev: ${result.details?.laplacianStdev ?? result.score})`
+                        : `Image appears blurry or out of focus (Laplacian Stdev: ${result.details?.laplacianStdev ?? result.score})`;
+                    } else if (result.checkName === 'brightness_analysis') {
+                      explanation = result.passed
+                        ? `Lighting luminance within optimal range (Mean Luminance Y: ${result.details?.meanBrightness ?? result.score})`
+                        : `Lighting is ${result.details?.assessment?.toLowerCase() || 'out of bounds'} (Mean Luminance Y: ${result.details?.meanBrightness ?? result.score})`;
+                    } else if (result.checkName === 'ocr_plate_validation') {
+                      explanation = result.details?.formatValid
+                        ? `Valid Indian vehicle plate format: ${result.details?.normalizedPlate || 'Verified'}`
+                        : 'Extracted text did not pass standard Indian vehicle plate regex format.';
+                    } else if (result.checkName === 'dimension_validation') {
+                      explanation = result.passed
+                        ? `Resolution ${result.details?.width}x${result.details?.height} meets pipeline bounds.`
+                        : `Resolution ${result.details?.width}x${result.details?.height} outside allowed bounds.`;
+                    } else {
+                      explanation = 'Analyzer executed successfully.';
+                    }
+                  }
+
+                  return (
+                    <div
+                      className={`p-3.5 rounded-xl text-xs font-medium border ${
+                        status === 'ISSUE_DETECTED'
+                          ? 'bg-rose-50/80 text-rose-900 border-rose-200'
+                          : status === 'REVIEW_REQUIRED'
+                          ? 'bg-amber-50/80 text-amber-900 border-amber-200'
+                          : 'bg-emerald-50/50 text-emerald-900 border-emerald-200'
+                      }`}
+                    >
+                      <div className="flex items-start space-x-2.5">
+                        <Info
+                          className={`w-4 h-4 shrink-0 mt-0.5 ${
+                            status === 'ISSUE_DETECTED'
+                              ? 'text-rose-600'
+                              : status === 'REVIEW_REQUIRED'
+                              ? 'text-amber-600'
+                              : 'text-emerald-600'
+                          }`}
+                        />
+                        <p className="font-semibold leading-relaxed">{explanation}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="space-y-1.5 pt-2 border-t border-slate-100 text-xs">
                   <div className="flex justify-between py-1 border-b border-slate-100">
