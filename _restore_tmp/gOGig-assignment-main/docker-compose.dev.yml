@@ -1,19 +1,21 @@
 services:
   api:
-    build: .
-    command: sh -c "npx prisma db push && npm run start"
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: sh -c "npx prisma db push && npm run dev"
     ports:
       - "3000:3000"
     environment:
       - DATABASE_URL=postgresql://user:password@postgres:5432/media_pipeline?schema=public
       - REDIS_URL=redis://redis:6379
       - UPLOAD_DIR=/app/uploads
-      - NODE_ENV=production
+      - NODE_ENV=development
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=${AWS_REGION:-ap-south-1}
     volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./prisma:/app/prisma
       - ./uploads:/app/uploads
     depends_on:
       postgres:
@@ -22,18 +24,20 @@ services:
         condition: service_healthy
 
   worker:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
     command: npm run worker
     environment:
       - DATABASE_URL=postgresql://user:password@postgres:5432/media_pipeline?schema=public
       - REDIS_URL=redis://redis:6379
       - UPLOAD_DIR=/app/uploads
-      - NODE_ENV=production
+      - NODE_ENV=development
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=${AWS_REGION:-ap-south-1}
     volumes:
+      - ./src:/app/src
+      - ./worker.ts:/app/worker.ts
+      - ./prisma:/app/prisma
       - ./uploads:/app/uploads
     depends_on:
       postgres:

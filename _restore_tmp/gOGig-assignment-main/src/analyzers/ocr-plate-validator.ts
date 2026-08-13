@@ -1,6 +1,5 @@
 import sharp from 'sharp';
 import { createWorker } from 'tesseract.js';
-import { RekognitionClient, DetectTextCommand } from '@aws-sdk/client-rekognition';
 import type { Analyzer, AnalyzerResult, ImageMetadataInput } from './types';
 import { logger } from '../lib/logger';
 
@@ -269,150 +268,6 @@ export class OcrPlateValidator implements Analyzer {
     return null;
   }
 
-  /**
-   * Tier 2: AWS Rekognition DetectText
-   * Uses Amazon Rekognition to detect text in images with high accuracy,
-   * especially for tilted/angled/perspective-distorted license plates.
-   */
-  private async performAwsRekognitionOCR(
-    buffer: Buffer,
-    width: number,
-    height: number
-  ): Promise<{
-    plateNumber: string | null;
-    rawText: string;
-    boundingBox?: { left: number; top: number; width: number; height: number };
-    confidence: number;
-    campaignBrand?: string | null;
-  } | null> {
-    const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-    const region = process.env.AWS_REGION || 'ap-south-1';
-
-    if (!accessKeyId || !secretAccessKey) {
-      logger.debug('AWS credentials not configured, skipping Rekognition');
-      return null;
-    }
-
-    try {
-      const client = new RekognitionClient({
-        region,
-        credentials: { accessKeyId, secretAccessKey },
-      });
-
-      // Convert to JPEG for Rekognition (max 5MB)
-      const jpegBuffer = await sharp(buffer)
-        .jpeg({ quality: 85 })
-        .resize(1920, undefined, { fit: 'inside', withoutEnlargement: true })
-        .toBuffer();
-
-      const command = new DetectTextCommand({
-        Image: { Bytes: jpegBuffer },
-      });
-
-      logger.info('Invoking AWS Rekognition DetectText for license plate extraction...');
-      const response = await client.send(command);
-
-      if (!response.TextDetections || response.TextDetections.length === 0) {
-        logger.warn('AWS Rekognition returned no text detections');
-        return null;
-      }
-
-      // Collect all detected LINE-level text
-      const allLines: string[] = [];
-      let bestPlate: string | null = null;
-      let bestBbox: { left: number; top: number; width: number; height: number } | undefined;
-      let bestConfidence = 0;
-
-      for (const detection of response.TextDetections) {
-        if (!detection.DetectedText) continue;
-
-        const text = detection.DetectedText.toUpperCase().replace(/[^A-Z0-9\s]/g, '');
-        allLines.push(text);
-
-        // Check if this text chunk contains a valid Indian plate
-        const check = this.normalizeAndFuzzyFixPlate(text);
-        if (check.isMatch && detection.Confidence && detection.Confidence > bestConfidence) {
-          bestPlate = check.normalized;
-          bestConfidence = detection.Confidence;
-
-          // Use Rekognition's accurate bounding box
-          if (detection.Geometry?.BoundingBox) {
-            const bb = detection.Geometry.BoundingBox;
-            bestBbox = {
-              left: Math.floor((bb.Left || 0) * width),
-              top: Math.floor((bb.Top || 0) * height),
-              width: Math.floor((bb.Width || 0.1) * width),
-              height: Math.floor((bb.Height || 0.05) * height),
-            };
-          }
-        }
-      }
-
-      // If no single detection matched, try combining adjacent text fragments
-      if (!bestPlate) {
-        const combinedText = allLines.join(' ');
-        const combinedCheck = this.normalizeAndFuzzyFixPlate(combinedText);
-        if (combinedCheck.isMatch) {
-          bestPlate = combinedCheck.normalized;
-          bestConfidence = 85;
-        }
-      }
-
-      if (!bestPlate) {
-        logger.info({ detectedTexts: allLines.slice(0, 10) }, 'AWS Rekognition found text but no valid Indian plate pattern');
-        return null;
-      }
-
-      // Extract campaign brand from all detected text
-      const fullText = allLines.join(' ');
-      const campaignBrand = this.extractCampaignBrand(fullText, '');
-
-      logger.info({ plate: bestPlate, confidence: bestConfidence, campaignBrand }, 'AWS Rekognition successfully detected license plate');
-
-      return {
-        plateNumber: bestPlate,
-        rawText: allLines.join('\n'),
-        boundingBox: bestBbox,
-        confidence: bestConfidence / 100,
-        campaignBrand,
-      };
-    } catch (err) {
-      logger.warn({ error: err instanceof Error ? err.message : err }, 'AWS Rekognition DetectText failed');
-      return null;
-    }
-  }
-
-  /**
-   * Extract campaign/advertiser brand name from OCR text
-   */
-  private extractCampaignBrand(rawText: string, filename: string): string | null {
-    const combined = `${rawText} ${filename}`.toUpperCase();
-
-    if (/ARENA\s*ANIMATION/i.test(combined) || /ARENA/i.test(combined) || /ANIMATION/i.test(combined)) {
-      return 'ARENA ANIMATION';
-    }
-    if (/AGARWAL/i.test(combined) || /EYE\s*HOSPITAL/i.test(combined) || /DR\s*AGARWAL/i.test(combined)) {
-      return 'Dr Agarwals Eye Hospital';
-    }
-    if (/CMWSSB/i.test(combined)) {
-      return 'CMWSSB';
-    }
-    if (/PUNE.*FC.*ROAD|FC\s*ROAD/i.test(combined)) {
-      return 'PUNE FC ROAD Campaign';
-    }
-
-    // Vehicle registration -> campaign brand mapping (for known test dataset)
-    if (/MH12NW8556|MH12KR1145/i.test(combined)) {
-      return 'ARENA ANIMATION';
-    }
-    if (/TN05BT5754/i.test(combined)) {
-      return 'Dr Agarwals Eye Hospital';
-    }
-
-    return null;
-  }
-
   private async performOcrWithTimeout(
     buffer: Buffer,
     timeoutMs = 8000
@@ -430,7 +285,7 @@ export class OcrPlateValidator implements Analyzer {
       const width = metadata.width || 800;
       const height = metadata.height || 800;
 
-      // Tier 1: Gemini Vision AI
+      // Check Gemini Vision AI first if API key configured
       const geminiResult = await this.performGeminiVisionOCR(buffer, width, height);
       if (geminiResult && geminiResult.plateNumber) {
         const bbox = geminiResult.boundingBox || {
@@ -445,24 +300,6 @@ export class OcrPlateValidator implements Analyzer {
           sourceAI: true,
           confidence: geminiResult.confidence,
           campaignBrand: geminiResult.campaignBrand || null,
-        };
-      }
-
-      // Tier 2: AWS Rekognition DetectText
-      const rekognitionResult = await this.performAwsRekognitionOCR(buffer, width, height);
-      if (rekognitionResult && rekognitionResult.plateNumber) {
-        const bbox = rekognitionResult.boundingBox || {
-          left: Math.floor(width * 0.40),
-          top: Math.floor(height * 0.62),
-          width: Math.floor(width * 0.50),
-          height: Math.floor(height * 0.25),
-        };
-        return {
-          text: rekognitionResult.rawText || rekognitionResult.plateNumber,
-          boundingBox: bbox,
-          sourceAI: true,
-          confidence: rekognitionResult.confidence,
-          campaignBrand: rekognitionResult.campaignBrand || null,
         };
       }
 
@@ -680,12 +517,9 @@ export class OcrPlateValidator implements Analyzer {
       const textToScan = `${rawText} ${filename}`;
       const bestMatch = this.normalizeAndFuzzyFixPlate(textToScan);
 
-      // Campaign brand: use AI result first, then fallback to keyword extraction
-      const campaignBrand = ocrResult.campaignBrand || this.extractCampaignBrand(rawText, filename);
-
       const isAiPowered = Boolean(ocrResult.sourceAI);
       const methodLabel = isAiPowered
-        ? 'Hybrid AI Vision (Gemini + AWS Rekognition) + CV Multi-Line Parser'
+        ? 'Hybrid Gemini 2.5 Flash Vision AI + CV Multi-Line Parser'
         : 'Tesseract.js Bumper Plate OCR + Multi-Token Heuristics';
 
       return {
@@ -695,7 +529,7 @@ export class OcrPlateValidator implements Analyzer {
         details: {
           rawText,
           normalizedPlate: bestMatch.normalized || null,
-          campaignBrand: campaignBrand || null,
+          campaignBrand: ocrResult.campaignBrand || null,
           formatValid: bestMatch.isMatch,
           fixedByHeuristic: bestMatch.fixedByHeuristic,
           regexPattern: '^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$',
