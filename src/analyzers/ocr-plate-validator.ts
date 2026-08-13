@@ -420,7 +420,7 @@ Return ONLY a JSON object with keys:
 
       // 2. Fallback to CV Geometry Ranker if Bedrock is offline or times out
       if (!campaignBrand) {
-        campaignBrand = this.extractDynamicCampaignBrand(allLineBoxes, allDetectedTextCombined);
+        campaignBrand = this.extractDynamicCampaignBrand(allLineBoxes, allDetectedTextCombined, bestPlate);
       }
 
       logger.info({ plate: bestPlate, confidence: bestConfidence, campaignBrand, boundingBox: bestBbox }, 'AWS Rekognition successfully detected license plate');
@@ -527,7 +527,8 @@ Compare BOTH the image and the extracted text to identify the primary corporate 
    */
   private extractDynamicCampaignBrand(
     lineBoxes: Array<{ text: string; bbox?: { Left?: number; Top?: number; Width?: number; Height?: number } }>,
-    rawText: string
+    rawText: string,
+    detectedPlate?: string | null
   ): string | null {
     if (!lineBoxes || lineBoxes.length === 0) {
       return null;
@@ -536,10 +537,17 @@ Compare BOTH the image and the extracted text to identify the primary corporate 
     const noiseRegex = /^[0-9\s\-\.]+$|[^a-zA-Z0-9\s\-\.&]|MH[0-9]|TN[0-9]|WB[0-9]|KA[0-9]|DL[0-9]|KL[0-9]|HR[0-9]|UP[0-9]|GJ[0-9]|COMPACT|IND|CNG|DIESEL|PETROL|CALL|TEL|PHONE|WWW|HTTP|EMAIL|PUNE|CITY|STOP|PERMIT|SPEED|ALL INDIA|APPLY|TERMS|REDMI|CAMERA|PHOTO|NOTE|MI DUAL|PRO|CARE|FOOD|HEALTH|GLOBAL|ALUMNI|CAREERS|DESIGN|CONTENT|RECRUITERS|CREATIVITY|LEADER|LEARN\b/i;
 
     // 1. Filter text lines located in upper 70% of the ad wrap
-    const candidates = lineBoxes.filter(l => {
-      if (!l.text || l.text.trim().length < 2) return false;
-      const clean = l.text.trim();
-      if (noiseRegex.test(clean)) return false;
+    const candidates = lineBoxes.map(l => ({
+      text: l.text.replace(/[^a-zA-Z0-9\s\-\.&]/g, '').trim(),
+      raw: l.text.trim(),
+      bbox: l.bbox
+    })).filter(l => {
+      if (!l.text || l.text.length < 2) return false;
+      // Filter out plate fragments or lines containing 3+ digits (e.g. W8556, R1145, 7755900813)
+      if (/\d{3,}/.test(l.text) || /^[A-Z0-9]{1,3}\d{3,4}$/i.test(l.text)) return false;
+      if (detectedPlate && (detectedPlate.includes(l.text) || l.text.includes(detectedPlate))) return false;
+      if (noiseRegex.test(l.text)) return false;
+
       const top = l.bbox?.Top ?? 0.5;
       return top < 0.70;
     });
@@ -552,13 +560,13 @@ Compare BOTH the image and the extracted text to identify the primary corporate 
     candidates.sort((a, b) => (b.bbox?.Height || 0) - (a.bbox?.Height || 0));
 
     const topCand = candidates[0];
-    let rawBrand = topCand.text.trim();
+    let rawBrand = topCand.text;
 
     // 3. Combine adjacent line vertically if present (e.g. Line 1 "ARENA" + Line 2 "ANIMATION")
     const topY = topCand.bbox?.Top ?? 0;
     const topX = topCand.bbox?.Left ?? 0;
     const adj = candidates.slice(1).find(c => {
-      const txt = c.text.trim().toUpperCase();
+      const txt = c.text.toUpperCase();
       if (txt === 'ALL' || txt.length < 3) return false;
       const dY = Math.abs((c.bbox?.Top ?? 0) - topY);
       const dX = Math.abs((c.bbox?.Left ?? 0) - topX);
@@ -567,8 +575,8 @@ Compare BOTH the image and the extracted text to identify the primary corporate 
 
     if (adj) {
       rawBrand = (topCand.bbox?.Top ?? 0) < (adj.bbox?.Top ?? 0)
-        ? `${topCand.text.trim()} ${adj.text.trim()}`
-        : `${adj.text.trim()} ${topCand.text.trim()}`;
+        ? `${topCand.text} ${adj.text}`
+        : `${adj.text} ${topCand.text}`;
     }
 
     return rawBrand.replace(/\s+/g, ' ').trim();
