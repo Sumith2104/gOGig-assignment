@@ -217,6 +217,7 @@ export class ImageService {
               checkName: true,
               passed: true,
               score: true,
+              details: true,
               error: true,
             },
           },
@@ -227,6 +228,11 @@ export class ImageService {
     const formattedData = data.map((img) => {
       const totalChecks = img.analysisResults.length;
       const passed = img.analysisResults.filter((r) => r.passed).length;
+      const ocrCheck = img.analysisResults.find((r) => r.checkName === 'ocr_plate_validation');
+      const ocrDetails = (ocrCheck?.details as any) || {};
+      const campaignBrand = ocrDetails.campaignBrand || null;
+      const normalizedPlate = ocrDetails.normalizedPlate || null;
+
       return {
         id: img.id,
         originalName: img.originalName,
@@ -242,6 +248,8 @@ export class ImageService {
           totalChecks,
           passed,
           score: totalChecks > 0 ? Math.round((passed / totalChecks) * 100) / 100 : 0,
+          campaignBrand,
+          normalizedPlate,
         },
       };
     });

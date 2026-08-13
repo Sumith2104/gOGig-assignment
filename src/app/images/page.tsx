@@ -140,13 +140,25 @@ export default function GalleryPage() {
                 }}
               />
 
-              {/* Glassmorphism Top Bar Overlay */}
-              <div className="absolute top-0 left-0 right-0 p-3 bg-gradient-to-b from-slate-950/80 via-slate-950/40 to-transparent flex items-center justify-between pointer-events-none">
-                <span className="px-2.5 py-1 backdrop-blur-md bg-slate-950/70 border border-slate-700 text-white text-[10px] font-mono font-bold">
-                  {formatBytes(img.fileSize)}
-                </span>
+              {/* Glassmorphism Top Badges Overlay */}
+              <div className="absolute top-3 left-3 right-3 flex justify-between items-start z-10 gap-2">
+                <div className="flex flex-col space-y-1">
+                  <span className="px-2.5 py-1 text-[10px] font-black uppercase backdrop-blur-md bg-slate-950/80 text-slate-100 border border-slate-700 shadow-sm">
+                    {img.mimeType?.split('/')[1] || 'img'} • {formatBytes(img.fileSize)}
+                  </span>
+                  {img.summary?.campaignBrand && (
+                    <span className="px-2.5 py-1 text-[10px] font-black backdrop-blur-md bg-slate-950/90 text-amber-400 border border-amber-500/60 shadow-sm max-w-[190px] truncate" title={img.summary.campaignBrand}>
+                      📢 {img.summary.campaignBrand}
+                    </span>
+                  )}
+                  {img.summary?.normalizedPlate && (
+                    <span className="px-2.5 py-1 text-[10px] font-mono font-bold backdrop-blur-md bg-slate-950/90 text-emerald-300 border border-emerald-500/60 shadow-sm">
+                      🚘 {img.summary.normalizedPlate}
+                    </span>
+                  )}
+                </div>
 
-                <div className="pointer-events-auto">
+                <div className="flex items-center space-x-1.5 shrink-0">
                   {img.status === 'COMPLETED' && (
                     <span className="px-2.5 py-1 text-[10px] font-black uppercase backdrop-blur-md bg-emerald-950/80 text-emerald-200 border border-emerald-700">
                       Completed

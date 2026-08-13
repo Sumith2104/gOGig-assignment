@@ -28,6 +28,8 @@ interface ImageItem {
     totalChecks: number;
     passed: number;
     score: number;
+    campaignBrand?: string | null;
+    normalizedPlate?: string | null;
   };
 }
 
@@ -192,6 +194,7 @@ export default function DashboardPage() {
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500 text-[11px] font-extrabold uppercase tracking-wider">
                   <th className="pb-3 px-3">Filename</th>
+                  <th className="pb-3 px-3">Campaign / Plate</th>
                   <th className="pb-3 px-3">Size</th>
                   <th className="pb-3 px-3">Status</th>
                   <th className="pb-3 px-3">Checks Passed</th>
@@ -206,9 +209,25 @@ export default function DashboardPage() {
                       <div className="w-9 h-9 rounded-lg bg-orange-50 border border-orange-200 flex items-center justify-center shrink-0">
                         <FileImage className="w-4 h-4 text-orange-600" />
                       </div>
-                      <span className="truncate max-w-[200px]" title={img.originalName}>
+                      <span className="truncate max-w-[180px]" title={img.originalName}>
                         {img.originalName}
                       </span>
+                    </td>
+                    <td className="py-4 px-3">
+                      <div className="flex flex-col space-y-1">
+                        {img.summary?.campaignBrand ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-black bg-slate-900 text-amber-400 border border-slate-700 shadow-xs max-w-[180px] truncate" title={img.summary.campaignBrand}>
+                            📢 {img.summary.campaignBrand}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-slate-400 font-medium">No Campaign Text</span>
+                        )}
+                        {img.summary?.normalizedPlate && (
+                          <span className="inline-flex items-center text-[10px] font-mono font-bold text-slate-700 tracking-wider">
+                            🚘 {img.summary.normalizedPlate}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-4 px-3 text-slate-700 font-semibold text-xs">{formatBytes(img.fileSize)}</td>
                     <td className="py-4 px-3">

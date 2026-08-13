@@ -301,6 +301,37 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
             <span>Physical Storage & Computer Vision Extraction</span>
           </h3>
 
+          {/* Outdoor Campaign Verification Highlight Card */}
+          {(() => {
+            const ocrRes = data.analysisResults?.find((r: any) => r.checkName === 'ocr_plate_validation');
+            const campaignBrand = ocrRes?.details?.campaignBrand;
+            const normalizedPlate = ocrRes?.details?.normalizedPlate;
+            if (!campaignBrand && !normalizedPlate) return null;
+
+            return (
+              <div className="p-4 rounded-xl bg-slate-900 text-white border border-slate-800 shadow-md space-y-2">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider flex items-center gap-1.5">
+                    📢 Outdoor Campaign Ad Verification (gOGig Platform)
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-950 text-emerald-300 border border-emerald-700">
+                    Audit Verified
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-medium">Campaign / Advertiser Brand:</span>
+                    <p className="text-sm font-black text-white">{campaignBrand || 'Generic Outdoor Wrap'}</p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-medium">Vehicle License Plate:</span>
+                    <p className="text-sm font-mono font-black text-amber-400">{normalizedPlate || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
               <span className="text-slate-500 font-medium">Stored File Path:</span>
