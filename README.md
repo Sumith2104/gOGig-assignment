@@ -35,16 +35,15 @@
 
 ## 🌐 Live Deployment Links
 
-The complete platform is live and publicly accessible on AWS EC2 with automatic SSL termination:
+The complete platform is live and publicly accessible on AWS EC2:
 
-| Portal / Service | Live URL | Description |
+| Application Page | Direct EC2 HTTP Link | Description |
 |:---|:---|:---|
-| 📊 **Main Monitoring Dashboard** | **[https://13.234.120.49.sslip.io](https://13.234.120.49.sslip.io)** | Real-time queue metrics, recent ingestion stream, and analyzer health. |
-| 🖼️ **Image Analysis Gallery** | **[https://13.234.120.49.sslip.io/images](https://13.234.120.49.sslip.io/images)** | Visual grid of all audited vehicles with brand & license plate tags. |
-| 📤 **Vehicle Upload Portal** | **[https://13.234.120.49.sslip.io/upload](https://13.234.120.49.sslip.io/upload)** | Field operator upload interface with drag-and-drop & live stage ticker. |
-| 🩺 **System Health Check API** | **[https://13.234.120.49.sslip.io/api/health](https://13.234.120.49.sslip.io/api/health)** | Live JSON health check for PostgreSQL, Redis, and storage. |
+| 📊 **Main Dashboard** | **[http://13.234.120.49:3000](http://13.234.120.49:3000)** | Real-time queue metrics, recent ingestion stream, and analyzer health. |
+| 🖼️ **Image Gallery** | **[http://13.234.120.49:3000/images](http://13.234.120.49:3000/images)** | Visual grid of all audited vehicles with brand & license plate inspection cards. |
+| 📤 **Upload Portal** | **[http://13.234.120.49:3000/upload](http://13.234.120.49:3000/upload)** | Field operator upload interface with drag-and-drop & real-time progress ticker. |
 
-> *Direct HTTP IP fallback*: `http://13.234.120.49:3000`
+> *SSL Mirror*: `https://13.234.120.49.sslip.io`
 
 ---
 
@@ -318,7 +317,7 @@ The OCR & Plate Validation analyzer uses a **3-tier hybrid AI architecture** for
 
 ## 📸 Live Demo & Inspection Reports
 
-> **Live Deployment**: [https://13.234.120.49.sslip.io](https://13.234.120.49.sslip.io)
+> **Live EC2 Deployment**: [http://13.234.120.49:3000](http://13.234.120.49:3000) *(SSL Mirror: [https://13.234.120.49.sslip.io](https://13.234.120.49.sslip.io))*
 
 ### Executive Real-Time Dashboard
 
