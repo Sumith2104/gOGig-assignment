@@ -210,7 +210,7 @@ Return ONLY a JSON object with keys:
         const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8.0s timeout for Gemini Vision AI
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for Gemini Vision AI
 
         const response = await fetch(requestUrl, {
           method: 'POST',
@@ -657,7 +657,7 @@ Return ONLY a JSON object: {"campaignBrand": "PRIMARY_BRAND_NAME"}`;
       for (const modelName of modelsToTry) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 6000);
+          const timeoutId = setTimeout(() => controller.abort(), 15000);
 
           const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
           const response = await fetch(requestUrl, {
@@ -718,6 +718,8 @@ Return ONLY a JSON object: {"campaignBrand": "PRIMARY_BRAND_NAME"}`;
 
       // Tier 1: AWS Rekognition (MAIN MODEL - Fast ~1s, 100% SLA, Bounding Box Precise)
       const rekognitionResult = await this.performAwsRekognitionOCR(buffer, width, height);
+      // Save Rekognition raw text for brand extraction even if plate not found
+      const rekognitionRawText = rekognitionResult?.rawText || '';
       if (rekognitionResult && rekognitionResult.plateNumber) {
         const bbox = rekognitionResult.boundingBox || {
           left: Math.floor(width * 0.40),
@@ -855,11 +857,10 @@ Return ONLY a JSON object: {"campaignBrand": "PRIMARY_BRAND_NAME"}`;
           if (checkA.isMatch) {
             logger.info({ region: region.label, plate: checkA.normalized, strategy: 'greyscale' }, 'Plate found via crop');
             await worker.terminate();
-            // Extract brand name from the full image using Gemini AI + CV geometry
-            const tessAllText = allTexts.join('\n') + '\n' + textA;
+            // Extract brand name using Rekognition's text (which has ARENA ANIMATION etc) + full image
+            const tessAllText = rekognitionRawText || (allTexts.join('\n') + '\n' + textA);
             let tessBrand = await this.performGeminiBrandExtractionWithOcr(buffer, tessAllText);
             if (!tessBrand) {
-              // CV geometry fallback using Rekognition's allLineBoxes from the full image scan above (via rawOcrText)
               tessBrand = this.extractDynamicCampaignBrand([], tessAllText, checkA.normalized);
             }
             return { text: textA, boundingBox: { left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight }, campaignBrand: tessBrand };
@@ -875,7 +876,7 @@ Return ONLY a JSON object: {"campaignBrand": "PRIMARY_BRAND_NAME"}`;
             if (checkB.isMatch) {
               logger.info({ region: region.label, plate: checkB.normalized, strategy: 'yellow-isolation' }, 'Plate found via yellow isolation');
               await worker.terminate();
-              const tessAllTextB = allTexts.join('\n') + '\n' + textB;
+              const tessAllTextB = rekognitionRawText || (allTexts.join('\n') + '\n' + textB);
               let tessBrandB = await this.performGeminiBrandExtractionWithOcr(buffer, tessAllTextB);
               if (!tessBrandB) {
                 tessBrandB = this.extractDynamicCampaignBrand([], tessAllTextB, checkB.normalized);
