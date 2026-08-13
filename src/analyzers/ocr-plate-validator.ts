@@ -386,21 +386,36 @@ Return ONLY a JSON object with keys:
             );
 
             if (matchingLine?.bbox) {
-              const bb = matchingLine.bbox;
+              const bb1 = matchingLine.bbox;
               const region = pass.cropRegion || { left: 0, top: 0, width, height };
+
+              // Find Line 2 for 2-line auto-rickshaw plates (e.g. Line 1 "MH12N", Line 2 "W8556" / "BT5754" / "R1145")
+              const line2 = lineBoxes.find(l =>
+                l !== matchingLine &&
+                Math.abs((l.bbox?.Left || 0) - (bb1.Left || 0)) < 0.20 &&
+                (l.bbox?.Top || 0) > (bb1.Top || 0) &&
+                ((l.bbox?.Top || 0) - (bb1.Top || 0)) < 0.15
+              );
+
+              const b1Top = bb1.Top || 0;
+              const b1Bottom = b1Top + (bb1.Height || 0.04);
+              const b2Bottom = line2?.bbox ? ((line2.bbox.Top || 0) + (line2.bbox.Height || 0.04)) : b1Bottom;
+              const totalHeightRelative = Math.max(0.04, b2Bottom - b1Top);
+
+              const maxRelWidth = Math.max(bb1.Width || 0.1, line2?.bbox?.Width || bb1.Width || 0.1);
+
               bestBbox = {
-                left: region.left + Math.floor((bb.Left || 0) * region.width),
-                top: region.top + Math.floor((bb.Top || 0) * region.height),
-                width: Math.floor((bb.Width || 0.1) * region.width),
-                height: Math.floor((bb.Height || 0.05) * region.height),
+                left: region.left + Math.floor((bb1.Left || 0) * region.width),
+                top: region.top + Math.floor(b1Top * region.height),
+                width: Math.min(region.width, Math.floor(maxRelWidth * region.width * 1.1)),
+                height: Math.min(region.height, Math.floor(totalHeightRelative * region.height * 1.25)),
               };
             } else if (pass.cropRegion) {
-              // Fallback bounding box relative to crop region
               bestBbox = {
-                left: Math.floor(width * 0.25),
-                top: pass.cropRegion.top + Math.floor(pass.cropRegion.height * 0.3),
-                width: Math.floor(width * 0.50),
-                height: Math.floor(height * 0.15),
+                left: Math.floor(width * 0.35),
+                top: pass.cropRegion.top + Math.floor(pass.cropRegion.height * 0.4),
+                width: Math.floor(width * 0.30),
+                height: Math.floor(height * 0.08),
               };
             }
             break;
