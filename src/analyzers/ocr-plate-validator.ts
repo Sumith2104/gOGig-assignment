@@ -169,7 +169,8 @@ export class OcrPlateValidator implements Analyzer {
     }
 
     // Best production vision model
-    const candidateModels = ['gemini-2.5-flash'];
+    // Try 2.5-flash first (better quality), fallback to 1.5-flash (higher free-tier quota)
+    const candidateModels = ['gemini-2.5-flash', 'gemini-1.5-flash'];
 
     const base64Image = buffer.toString('base64');
     const promptText = `Scan the provided image and evaluate all the visible text.
@@ -223,8 +224,8 @@ Return ONLY a JSON object with keys:
         if (!response.ok) {
           let errorBody = '';
           try { errorBody = await response.text(); } catch {}
-          logger.warn({ modelName, status: response.status, body: errorBody.substring(0, 300) }, 'Gemini Vision AI returned non-OK status, fast failing to AWS Rekognition');
-          return null; // Fast fail immediately to AWS Rekognition Tier 2
+          logger.warn({ modelName, status: response.status, body: errorBody.substring(0, 200) }, 'Gemini Vision AI non-OK, retrying next model...');
+          continue; // Try next model in candidateModels list
         }
 
         const responseData = await response.json();
@@ -563,7 +564,9 @@ Compare BOTH the image and the extracted text to identify the primary corporate 
       return null;
     }
 
-    const noiseRegex = /^[0-9\s\-\.]+$|[^a-zA-Z0-9\s\-\.&]|MH[0-9]|TN[0-9]|WB[0-9]|KA[0-9]|DL[0-9]|KL[0-9]|HR[0-9]|UP[0-9]|GJ[0-9]|COMPACT|IND|CNG|DIESEL|PETROL|CALL|TEL|PHONE|WWW|HTTP|EMAIL|PUNE|CITY|STOP|PERMIT|SPEED|ALL INDIA|APPLY|TERMS|REDMI|CAMERA|PHOTO|NOTE|MI DUAL|PRO|CARE|FOOD|HEALTH|GLOBAL|ALUMNI|CAREERS|DESIGN|CONTENT|RECRUITERS|CREATIVITY|LEADER|LEARN\b/i;
+    // Only filter out pure noise: numbers-only, URLs, emails, and vehicle-related noise
+    // Do NOT filter brand/ad copy words — let the tallest-font sorting do the job
+    const noiseRegex = /^[0-9\s\-\.]+$|https?:\/\/|www\.|\b\w+@\w+\b|^(CNG|LPG|DIESEL|PETROL|STOP|PERMIT)$/i;
 
     // 1. Filter text lines located in upper 70% of the ad wrap
     const candidates = lineBoxes.map(l => ({
@@ -582,7 +585,9 @@ Compare BOTH the image and the extracted text to identify the primary corporate 
     });
 
     if (candidates.length === 0) {
-      return null;
+      // Last resort: pick the longest alphabetic token from rawText
+      const fallbackMatch = rawText.replace(/[^a-zA-Z\s]/g, ' ').split(/\s+/).filter(w => w.length > 3);
+      return fallbackMatch.length > 0 ? fallbackMatch.slice(0, 2).join(' ').trim() : null;
     }
 
     // 2. Sort candidates by visual font HEIGHT (tallest logo letters first)
@@ -647,34 +652,52 @@ Return ONLY a JSON object: {"campaignBrand": "PRIMARY_BRAND_NAME"}`;
         }
       });
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash'];
 
-      const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-      const response = await fetch(requestUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: requestBody,
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
+      for (const modelName of modelsToTry) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-      if (!response.ok) return null;
+          const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+          const response = await fetch(requestUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: requestBody,
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
 
-      const responseData = await response.json();
-      const textOutput = responseData?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!textOutput) return null;
+          if (!response.ok) {
+            logger.warn({ modelName, status: response.status }, 'Gemini brand extraction non-OK, trying next model...');
+            continue;
+          }
 
-      const jsonMatch = textOutput.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) return null;
+          const responseData = await response.json();
+          const textOutput = responseData?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!textOutput) continue;
 
-      const json = JSON.parse(jsonMatch[0]);
-      return json.campaignBrand || null;
+          const jsonMatch = textOutput.match(/\{[\s\S]*\}/);
+          if (!jsonMatch) continue;
+
+          const json = JSON.parse(jsonMatch[0]);
+          const brand = json.campaignBrand;
+          if (brand && brand.length > 1) {
+            logger.info({ modelName, brand }, 'Gemini brand extraction succeeded');
+            return brand;
+          }
+        } catch (innerErr) {
+          logger.warn({ modelName, error: innerErr instanceof Error ? innerErr.message : innerErr }, 'Gemini model attempt failed, trying next...');
+        }
+      }
+
+      return null;
     } catch (err) {
       logger.warn({ error: err instanceof Error ? err.message : err }, 'Gemini OCR brand extraction failed or timed out');
       return null;
     }
   }
+
 
   private async performOcrWithTimeout(
     buffer: Buffer,
