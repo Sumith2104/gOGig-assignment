@@ -412,8 +412,8 @@ export class OcrPlateValidator implements Analyzer {
         return null;
       }
 
-      // 1. AWS Bedrock Multimodal Vision AI Model (Primary Brand Extractor)
-      let campaignBrand = await this.performAwsBedrockBrandVision(buffer);
+      // 1. User's 3-Step Hybrid Architecture: Pass raw OCR text + Image into AI Vision Model
+      let campaignBrand = await this.performAwsBedrockBrandVision(buffer, allDetectedTextCombined);
 
       // 2. Fallback to CV Geometry Ranker if Bedrock is offline or times out
       if (!campaignBrand) {
@@ -436,10 +436,12 @@ export class OcrPlateValidator implements Analyzer {
   }
 
   /**
-   * AWS Native Multimodal Vision AI Model (Amazon Bedrock Claude 3 Haiku)
-   * Visually recognizes corporate brand logos directly from image pixels.
+   * User's 3-Step Hybrid Architecture:
+   * 1. Any OCR technique extracts text from image (`rawOcrText`).
+   * 2. Extracted English text AND image bytes are shared with AWS Bedrock AI Vision Model.
+   * 3. AI compares BOTH image + extracted text, fixes any OCR typos, and returns the full official brand name.
    */
-  private async performAwsBedrockBrandVision(buffer: Buffer): Promise<string | null> {
+  private async performAwsBedrockBrandVision(buffer: Buffer, rawOcrText: string): Promise<string | null> {
     try {
       const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
       const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
@@ -453,6 +455,14 @@ export class OcrPlateValidator implements Analyzer {
       });
 
       const base64Image = buffer.toString('base64');
+      const promptText = `Here is the vehicle ad wrap image AND here is the raw text extracted from the image by an OCR scanner:
+
+--- EXTRACTED OCR TEXT ---
+${rawOcrText}
+--------------------------
+
+Compare BOTH the image and the extracted text to identify the primary corporate advertiser / campaign brand name. Clean up any OCR typos or misread characters and return the official full brand name (e.g. 'SriSri Tattva', 'ARENA ANIMATION', 'Dr Agarwals Eye Hospital', 'CMWSSB'). Return ONLY a JSON object: {"campaignBrand": "FULL_BRAND_NAME"}.`;
+
       const payload = {
         anthropic_version: 'bedrock-2023-05-31',
         max_tokens: 150,
@@ -470,7 +480,7 @@ export class OcrPlateValidator implements Analyzer {
               },
               {
                 type: 'text',
-                text: 'Identify ONLY the primary corporate brand name or advertiser logo visible on this vehicle ad wrap (e.g. ARENA ANIMATION, SriSri Tattva, Dr Agarwals Eye Hospital, CMWSSB). Do NOT return long promotional sentences, body text, or phone numbers. Return ONLY a JSON object with key: {"campaignBrand": "EXACT_BRAND_NAME"}.'
+                text: promptText
               }
             ]
           }
