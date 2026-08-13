@@ -215,7 +215,6 @@ export class ImageService {
           analysisResults: {
             select: {
               checkName: true,
-              resultStatus: true,
               passed: true,
               score: true,
               details: true,
@@ -227,12 +226,8 @@ export class ImageService {
     ]);
 
     const formattedData = data.map((img) => {
-      const totalChecks = 6;
-      const completed = img.analysisResults.length;
-      const issuesDetected = img.analysisResults.filter((r) => r.resultStatus === 'ISSUE_DETECTED' || (!r.passed && r.resultStatus !== 'REVIEW_REQUIRED')).length;
-      const analyzerErrors = img.analysisResults.filter((r) => r.resultStatus === 'ANALYZER_ERROR' || Boolean(r.error)).length;
-      const reviewRequired = img.analysisResults.some((r) => r.resultStatus === 'REVIEW_REQUIRED' || (r.details as any)?.reviewRequired);
-
+      const totalChecks = img.analysisResults.length;
+      const passed = img.analysisResults.filter((r) => r.passed).length;
       const ocrCheck = img.analysisResults.find((r) => r.checkName === 'ocr_plate_validation');
       const ocrDetails = (ocrCheck?.details as any) || {};
       const campaignBrand = ocrDetails.campaignBrand || null;
@@ -251,12 +246,8 @@ export class ImageService {
         processedAt: img.processedAt,
         summary: {
           totalChecks,
-          completed,
-          issuesDetected,
-          analyzerErrors,
-          reviewRequired,
-          passed: completed - issuesDetected - analyzerErrors,
-          score: completed > 0 ? Math.round(((completed - issuesDetected - analyzerErrors) / totalChecks) * 100) / 100 : 0,
+          passed,
+          score: totalChecks > 0 ? Math.round((passed / totalChecks) * 100) / 100 : 0,
           campaignBrand,
           normalizedPlate,
         },

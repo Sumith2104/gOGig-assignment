@@ -16,22 +16,19 @@ export class BrightnessAnalyzer implements Analyzer {
       const stats = await sharp(imageBuffer).greyscale().stats();
       const meanBrightness = stats.channels[0].mean;
 
-      let assessment: 'ACCEPTABLE' | 'TOO_DARK' | 'OVEREXPOSED' = 'ACCEPTABLE';
+      let assessment: 'normal' | 'too_dark' | 'overexposed' = 'normal';
       let passed = true;
 
       if (meanBrightness < this.minThreshold) {
-        assessment = 'TOO_DARK';
+        assessment = 'too_dark';
         passed = false;
       } else if (meanBrightness > this.maxThreshold) {
-        assessment = 'OVEREXPOSED';
+        assessment = 'overexposed';
         passed = false;
       }
 
-      const resultStatus = passed ? 'NO_ISSUE_DETECTED' : 'ISSUE_DETECTED';
-
       return {
         checkName: this.name,
-        resultStatus,
         passed,
         score: Math.round(meanBrightness * 100) / 100,
         details: {
@@ -42,7 +39,6 @@ export class BrightnessAnalyzer implements Analyzer {
             max: this.maxThreshold,
           },
           method: 'Greyscale Mean Luminance',
-          evidence: `Mean Luminance Y = ${meanBrightness.toFixed(2)} (Acceptable Range: ${this.minThreshold} - ${this.maxThreshold})`,
         },
       };
     } catch {
@@ -63,20 +59,16 @@ export class BrightnessAnalyzer implements Analyzer {
 
       const meanBrightness = sum / (data.length / 3);
       const passed = meanBrightness >= this.minThreshold && meanBrightness <= this.maxThreshold;
-      const resultStatus = passed ? 'NO_ISSUE_DETECTED' : 'ISSUE_DETECTED';
-      const assessment = meanBrightness < this.minThreshold ? 'TOO_DARK' : meanBrightness > this.maxThreshold ? 'OVEREXPOSED' : 'ACCEPTABLE';
 
       return {
         checkName: this.name,
-        resultStatus,
         passed,
         score: Math.round(meanBrightness * 100) / 100,
         details: {
           meanBrightness: Math.round(meanBrightness * 100) / 100,
-          assessment,
+          assessment: meanBrightness < this.minThreshold ? 'too_dark' : meanBrightness > this.maxThreshold ? 'overexposed' : 'normal',
           range: { min: this.minThreshold, max: this.maxThreshold },
           method: 'RGB Buffer Luminance Sampling (Fallback)',
-          evidence: `Mean Fallback Luminance Y = ${meanBrightness.toFixed(2)} (Acceptable Range: ${this.minThreshold} - ${this.maxThreshold})`,
           fallbackExecuted: true,
         },
       };

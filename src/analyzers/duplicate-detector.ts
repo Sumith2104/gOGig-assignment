@@ -84,25 +84,18 @@ export class DuplicateDetector implements Analyzer {
     }
 
     const isDuplicate = minDistance <= this.maxHammingDistance;
-    const resultStatus = isDuplicate ? 'ISSUE_DETECTED' : 'NO_ISSUE_DETECTED';
-    const assessment = isDuplicate ? 'PERCEPTUAL_DUPLICATE_FOUND' : 'NO_PERCEPTUAL_DUPLICATE';
 
     return {
       checkName: this.name,
-      resultStatus,
-      passed: !isDuplicate,
+      passed: !isDuplicate, // Passed = true if NO duplicate detected
       score: minDistance === Infinity ? 64 : minDistance,
       details: {
         phash: currentHash,
         isDuplicate,
-        assessment,
         closestMatchId,
         closestMatchName,
         hammingDistance: minDistance === Infinity ? null : minDistance,
         threshold: this.maxHammingDistance,
-        evidence: isDuplicate
-          ? `Perceptually similar image detected: '${closestMatchName}' (Hamming Distance: ${minDistance} <= ${this.maxHammingDistance})`
-          : `Zero perceptual duplicates found in DB (Min Hamming Distance: ${minDistance === Infinity ? 'N/A' : minDistance})`,
       },
     };
   }

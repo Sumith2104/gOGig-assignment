@@ -113,8 +113,12 @@ export class MetadataAnalyzer implements Analyzer {
       }
 
       // Anomaly heuristics
+      if (!cameraMake && !cameraModel && !hasGps) {
+        anomalies.push('Missing camera make/model metadata (potential digital crop or screenshot)');
+      }
+
       if (software && /photoshop|gimp|lightroom|paint|editor|canva/i.test(software)) {
-        anomalies.push(`Image edited using graphics software: ${software}`);
+        anomalies.push(`Image processed by editing software: ${software}`);
       }
 
       if (dateTime) {
@@ -124,13 +128,11 @@ export class MetadataAnalyzer implements Analyzer {
         }
       }
 
-      const hasEditingAnomalies = anomalies.length > 0;
-      const resultStatus = hasEditingAnomalies ? 'ISSUE_DETECTED' : 'NO_ISSUE_DETECTED';
+      const passed = anomalies.length === 0;
 
       return {
         checkName: this.name,
-        resultStatus,
-        passed: !hasEditingAnomalies,
+        passed,
         score: Math.max(0, 1 - anomalies.length * 0.33),
         details: {
           cameraMake,
@@ -144,9 +146,6 @@ export class MetadataAnalyzer implements Analyzer {
           anomaliesCount: anomalies.length,
           anomalies,
           hasExifData: Object.keys(tags).length > 0,
-          evidence: Object.keys(tags).length > 0
-            ? `EXIF headers extracted successfully. Camera Make: ${cameraMake || 'N/A'}, GPS Source: ${gpsSource}.`
-            : `EXIF headers absent (common for compressed web uploads / messaging apps). GPS Source: ${gpsSource}.`,
         },
       };
     } catch {
@@ -155,7 +154,6 @@ export class MetadataAnalyzer implements Analyzer {
 
       return {
         checkName: this.name,
-        resultStatus: 'NO_ISSUE_DETECTED',
         passed: true,
         score: visualGps.hasGps ? 0.9 : 0.5,
         details: {
@@ -167,10 +165,9 @@ export class MetadataAnalyzer implements Analyzer {
           longitude: visualGps.longitude || null,
           dateTime: null,
           software: null,
-          anomaliesCount: 0,
-          anomalies: [],
+          anomaliesCount: visualGps.hasGps ? 0 : 1,
+          anomalies: visualGps.hasGps ? [] : ['No EXIF metadata header present in image file'],
           hasExifData: false,
-          evidence: 'EXIF metadata header absent. Visual GPS watermark scanned.',
         },
       };
     }

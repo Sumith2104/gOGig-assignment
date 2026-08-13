@@ -31,22 +31,17 @@ export class BlurDetector implements Analyzer {
       }).stats();
 
       const stdev = stats.channels[0].stdev;
-      const variance = stdev * stdev;
       const passed = stdev >= this.primaryThreshold;
-      const resultStatus = passed ? 'NO_ISSUE_DETECTED' : 'ISSUE_DETECTED';
 
       return {
         checkName: this.name,
-        resultStatus,
         passed,
         score: Math.round(stdev * 100) / 100,
         details: {
-          method: '3x3 Laplacian Convolution',
+          method: 'Laplacian Variance (3x3 Kernel)',
           laplacianStdev: Math.round(stdev * 100) / 100,
-          laplacianVariance: Math.round(variance * 100) / 100,
-          thresholdStdev: this.primaryThreshold,
-          assessment: passed ? 'SHARP' : 'MODERATELY_BLURRY',
-          evidence: `Measured Laplacian Standard Deviation σ = ${stdev.toFixed(2)} (Threshold: ${this.primaryThreshold})`,
+          threshold: this.primaryThreshold,
+          assessment: passed ? 'sharp' : 'blurry',
         },
       };
     } catch (primaryError) {
@@ -77,22 +72,17 @@ export class BlurDetector implements Analyzer {
         }).stats();
 
         const stdev = stats.channels[0].stdev;
-        const variance = stdev * stdev;
         const passed = stdev >= 15.0;
-        const resultStatus = passed ? 'NO_ISSUE_DETECTED' : 'ISSUE_DETECTED';
 
         return {
           checkName: this.name,
-          resultStatus,
           passed,
           score: Math.round(stdev * 100) / 100,
           details: {
-            method: 'Fallback Expanded 5x5 Laplacian',
+            method: 'Fallback Expanded Laplacian (5x5 Kernel)',
             laplacianStdev: Math.round(stdev * 100) / 100,
-            laplacianVariance: Math.round(variance * 100) / 100,
-            thresholdStdev: 15.0,
-            assessment: passed ? 'SHARP' : 'MODERATELY_BLURRY',
-            evidence: `Measured Fallback Laplacian Standard Deviation σ = ${stdev.toFixed(2)} (Threshold: 15.0)`,
+            threshold: 15.0,
+            assessment: passed ? 'sharp' : 'blurry',
             fallbackExecuted: true,
           },
         };

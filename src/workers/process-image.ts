@@ -71,7 +71,6 @@ export async function processImageJob(job: Job<{ imageId: string }>) {
           create: {
             imageId,
             checkName: result.checkName,
-            resultStatus: (result.resultStatus || (result.passed ? 'NO_ISSUE_DETECTED' : 'ISSUE_DETECTED')) as any,
             passed: result.passed,
             score: result.score,
             details: result.details as any,
@@ -79,7 +78,6 @@ export async function processImageJob(job: Job<{ imageId: string }>) {
             durationMs,
           },
           update: {
-            resultStatus: (result.resultStatus || (result.passed ? 'NO_ISSUE_DETECTED' : 'ISSUE_DETECTED')) as any,
             passed: result.passed,
             score: result.score,
             details: result.details as any,
@@ -89,7 +87,7 @@ export async function processImageJob(job: Job<{ imageId: string }>) {
         }).catch((e) => logger.warn({ imageId, checkName: result.checkName, error: e }, 'Failed early upsert of check result'));
 
         logger.info(
-          { correlationId, imageId, analyzer: analyzer.name, resultStatus: result.resultStatus, score: result.score, durationMs },
+          { correlationId, imageId, analyzer: analyzer.name, passed: result.passed, score: result.score, durationMs },
           'Analyzer completed'
         );
       } catch (err) {
@@ -100,7 +98,6 @@ export async function processImageJob(job: Job<{ imageId: string }>) {
 
         const failedResult = {
           checkName: analyzer.name,
-          resultStatus: 'ANALYZER_ERROR' as const,
           passed: false,
           score: null,
           details: { error: errorMessage },
@@ -112,8 +109,8 @@ export async function processImageJob(job: Job<{ imageId: string }>) {
 
         await prisma.analysisResult.upsert({
           where: { imageId_checkName: { imageId, checkName: analyzer.name } },
-          create: { imageId, checkName: analyzer.name, resultStatus: 'ANALYZER_ERROR' as any, passed: false, score: null, details: { error: errorMessage } as any, error: errorMessage, durationMs },
-          update: { resultStatus: 'ANALYZER_ERROR' as any, passed: false, score: null, details: { error: errorMessage } as any, error: errorMessage, durationMs },
+          create: { imageId, checkName: analyzer.name, passed: false, score: null, details: { error: errorMessage } as any, error: errorMessage, durationMs },
+          update: { passed: false, score: null, details: { error: errorMessage } as any, error: errorMessage, durationMs },
         }).catch(() => {});
       }
     }
@@ -133,6 +130,7 @@ export async function processImageJob(job: Job<{ imageId: string }>) {
       const imgH = sharpMeta.height || 800;
 
       if (!bbox) {
+        // Estimate plate search region based on orientation
         const isPortrait = imgH > imgW;
         bbox = isPortrait
           ? { left: Math.floor(imgW * 0.10), top: Math.floor(imgH * 0.72), width: Math.floor(imgW * 0.80), height: Math.floor(imgH * 0.20) }
@@ -171,7 +169,6 @@ export async function processImageJob(job: Job<{ imageId: string }>) {
           create: {
             imageId,
             checkName: r.checkName,
-            resultStatus: r.resultStatus as any,
             passed: r.passed,
             score: r.score,
             details: r.details as any,
@@ -179,7 +176,6 @@ export async function processImageJob(job: Job<{ imageId: string }>) {
             durationMs: r.durationMs,
           },
           update: {
-            resultStatus: r.resultStatus as any,
             passed: r.passed,
             score: r.score,
             details: r.details as any,

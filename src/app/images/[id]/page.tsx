@@ -23,7 +23,6 @@ import {
   Layers,
   Activity,
   HardDrive,
-  Sparkles,
 } from 'lucide-react';
 import { formatBytes, formatDuration } from '@/lib/utils';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
@@ -36,8 +35,6 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isGeneratingAiSummary, setIsGeneratingAiSummary] = useState(false);
-  const [aiSummaryText, setAiSummaryText] = useState<string | null>(null);
 
   const fetchResults = async () => {
     try {
@@ -89,23 +86,6 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
       console.error(e);
       setIsDeleting(false);
       setIsDeleteModalOpen(false);
-    }
-  };
-
-  const handleGenerateAiSummary = async () => {
-    setIsGeneratingAiSummary(true);
-    try {
-      const res = await fetch(`/api/images/${data.id}/summary`, { method: 'POST' });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.aiSummary) {
-          setAiSummaryText(json.aiSummary);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to generate AI summary:', err);
-    } finally {
-      setIsGeneratingAiSummary(false);
     }
   };
 
@@ -321,51 +301,6 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
             <span>Physical Storage & Computer Vision Extraction</span>
           </h3>
 
-          {/* Gemini AI Executive Inspection Summary Card */}
-          {(() => {
-            const ocrRes = data.analysisResults?.find((r: any) => r.checkName === 'ocr_plate_validation');
-            const campaignBrand = ocrRes?.details?.campaignBrand;
-            const normalizedPlate = ocrRes?.details?.normalizedPlate;
-
-            return (
-              <div className="p-4 rounded-xl bg-slate-950 text-white border border-slate-800 shadow-md space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-2.5 gap-2">
-                  <span className="text-[11px] font-black uppercase text-slate-300 tracking-wider flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" /> Gemini Vision AI Executive Inspection Summary
-                  </span>
-                  <button
-                    onClick={handleGenerateAiSummary}
-                    disabled={isGeneratingAiSummary}
-                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-black text-xs rounded transition-all flex items-center justify-center space-x-1.5 shadow-sm shrink-0"
-                  >
-                    <Zap className={`w-3.5 h-3.5 ${isGeneratingAiSummary ? 'animate-spin' : ''}`} />
-                    <span>{isGeneratingAiSummary ? 'Generating AI Audit...' : 'Generate Instant AI Audit'}</span>
-                  </button>
-                </div>
-
-                <p className="text-xs font-semibold leading-relaxed text-slate-200">
-                  {aiSummaryText ||
-                    ocrRes?.details?.aiExecutiveSummary ||
-                    `Vehicle photo inspected under campaign '${campaignBrand || 'Unspecified Campaign'}' with plate '${normalizedPlate || 'Unverified Plate'}'. ${data.summary?.completed || 6} of 6 checks executed cleanly with ${data.summary?.issuesDetected || 0} quality/perceptual issue(s) detected.`}
-                </p>
-
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <span className="px-2.5 py-1 text-[10px] font-black bg-slate-900 text-amber-400 border border-slate-800">
-                    BRAND: {campaignBrand || 'UNSPECIFIED'}
-                  </span>
-                  <span className="px-2.5 py-1 text-[10px] font-mono font-bold bg-slate-900 text-emerald-300 border border-slate-800">
-                    PLATE: {normalizedPlate || 'UNVERIFIED'}
-                  </span>
-                  <span className={`px-2.5 py-1 text-[10px] font-black uppercase border ${
-                    data.summary?.issuesDetected ? 'bg-rose-950 text-rose-300 border-rose-800' : 'bg-emerald-950 text-emerald-300 border-emerald-800'
-                  }`}>
-                    {data.summary?.issuesDetected ? `${data.summary.issuesDetected} ISSUE(S) LOGGED` : 'ZERO ISSUES LOGGED'}
-                  </span>
-                </div>
-              </div>
-            );
-          })()}
-
           {/* Outdoor Campaign Verification Highlight Card */}
           {(() => {
             const ocrRes = data.analysisResults?.find((r: any) => r.checkName === 'ocr_plate_validation');
@@ -505,20 +440,7 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {data.analysisResults?.map((result: any) => {
             const Icon = getCheckIcon(result.checkName);
-            const status: string = result.resultStatus || (result.passed ? 'NO_ISSUE_DETECTED' : 'ISSUE_DETECTED');
-
-            let badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-300';
-            let badgeText = 'NO ISSUE DETECTED';
-            if (status === 'ISSUE_DETECTED') {
-              badgeStyle = 'bg-rose-50 text-rose-800 border-rose-300';
-              badgeText = 'ISSUE DETECTED';
-            } else if (status === 'REVIEW_REQUIRED') {
-              badgeStyle = 'bg-amber-50 text-amber-900 border-amber-300';
-              badgeText = 'REVIEW REQUIRED';
-            } else if (status === 'ANALYZER_ERROR') {
-              badgeStyle = 'bg-slate-900 text-rose-300 border-slate-700';
-              badgeText = 'ANALYZER ERROR';
-            }
+            const isPassed = result.passed;
 
             return (
               <div
@@ -538,80 +460,81 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
                     </div>
                   </div>
 
-                  <span className={`px-2.5 py-1 rounded-md text-[10px] font-black border ${badgeStyle}`}>
-                    {badgeText}
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-extrabold flex items-center space-x-1 border ${
+                      isPassed
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-rose-50 text-rose-700 border-rose-200'
+                    }`}
+                  >
+                    {isPassed ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Passed</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        <span>Flagged</span>
+                      </>
+                    )}
                   </span>
                 </div>
 
-                {/* Dynamic Smart Evidence & Issue Explanation Banner */}
-                {(() => {
-                  let explanation = result.details?.evidence || result.details?.error;
-
-                  if (!explanation || explanation === 'Analyzer executed successfully.') {
-                    if (result.checkName === 'duplicate_detection') {
-                      explanation = result.details?.isDuplicate
-                        ? `Perceptual duplicate match detected: Closest match '${result.details?.closestMatchName || 'another image'}' (Hamming Distance: ${result.details?.hammingDistance ?? 0} bits)`
-                        : 'Zero perceptual duplicates found in database.';
-                    } else if (result.checkName === 'metadata_analysis') {
-                      const anomalies = result.details?.anomalies;
-                      explanation = Array.isArray(anomalies) && anomalies.length > 0
-                        ? `Anomalies detected: ${anomalies.join('; ')}`
-                        : 'EXIF metadata header absent (common for compressed web uploads / messaging apps).';
-                    } else if (result.checkName === 'blur_detection') {
-                      explanation = result.passed
-                        ? `Image is sharp with clear edge definitions (Laplacian Stdev: ${result.details?.laplacianStdev ?? result.score})`
-                        : `Image appears blurry or out of focus (Laplacian Stdev: ${result.details?.laplacianStdev ?? result.score})`;
-                    } else if (result.checkName === 'brightness_analysis') {
-                      explanation = result.passed
-                        ? `Lighting luminance within optimal range (Mean Luminance Y: ${result.details?.meanBrightness ?? result.score})`
-                        : `Lighting is ${result.details?.assessment?.toLowerCase() || 'out of bounds'} (Mean Luminance Y: ${result.details?.meanBrightness ?? result.score})`;
-                    } else if (result.checkName === 'ocr_plate_validation') {
-                      explanation = result.details?.formatValid
-                        ? `Valid Indian vehicle plate format: ${result.details?.normalizedPlate || 'Verified'}`
-                        : 'Extracted text did not pass standard Indian vehicle plate regex format.';
-                    } else if (result.checkName === 'dimension_validation') {
-                      explanation = result.passed
-                        ? `Resolution ${result.details?.width}x${result.details?.height} meets pipeline bounds.`
-                        : `Resolution ${result.details?.width}x${result.details?.height} outside allowed bounds.`;
-                    } else {
-                      explanation = 'Analyzer executed successfully.';
-                    }
-                  }
-
-                  return (
-                    <div
-                      className={`p-3.5 rounded-xl text-xs font-medium border ${
-                        status === 'ISSUE_DETECTED'
-                          ? 'bg-rose-50/80 text-rose-900 border-rose-200'
-                          : status === 'REVIEW_REQUIRED'
-                          ? 'bg-amber-50/80 text-amber-900 border-amber-200'
-                          : 'bg-emerald-50/50 text-emerald-900 border-emerald-200'
-                      }`}
-                    >
-                      <div className="flex items-start space-x-2.5">
-                        <Info
-                          className={`w-4 h-4 shrink-0 mt-0.5 ${
-                            status === 'ISSUE_DETECTED'
-                              ? 'text-rose-600'
-                              : status === 'REVIEW_REQUIRED'
-                              ? 'text-amber-600'
-                              : 'text-emerald-600'
-                          }`}
-                        />
-                        <p className="font-semibold leading-relaxed">{explanation}</p>
-                      </div>
+                <div
+                  className={`p-3 rounded-xl text-xs font-medium border ${
+                    isPassed
+                      ? 'bg-emerald-50/50 text-emerald-800 border-emerald-200'
+                      : 'bg-rose-50/50 text-rose-800 border-rose-200'
+                  }`}
+                >
+                  <div className="flex items-start space-x-2">
+                    <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      {result.checkName === 'blur_detection' && (
+                        <p>{isPassed ? 'Image is sharp with clear edge definitions.' : 'Image appears blurry or out of focus.'}</p>
+                      )}
+                      {result.checkName === 'brightness_analysis' && (
+                        <p>{isPassed ? 'Lighting and pixel luminance are within optimal range.' : 'Image lighting is too dark or overexposed.'}</p>
+                      )}
+                      {result.checkName === 'duplicate_detection' && (
+                        <p>{isPassed ? 'No perceptual duplicates found in database.' : 'Perceptually similar image already exists in database.'}</p>
+                      )}
+                      {result.checkName === 'ocr_plate_validation' && (
+                        <p>
+                          {isPassed
+                            ? `Extracted valid Indian vehicle plate: ${result.details?.normalizedPlate || 'Valid'}`
+                            : 'Indian vehicle number plate format could not be verified automatically. Ensure the license plate is clean and readable.'}
+                        </p>
+                      )}
+                      {result.checkName === 'dimension_validation' && (
+                        <p>{isPassed ? 'Image resolution and aspect ratio meet pipeline standards.' : 'Image dimensions or aspect ratio outside allowed bounds.'}</p>
+                      )}
+                      {result.checkName === 'metadata_analysis' && (
+                        <div>
+                          {result.details?.anomalies?.length > 0 ? (
+                            <ul className="list-disc list-inside space-y-1">
+                              {result.details.anomalies.map((a: string, idx: number) => (
+                                <li key={idx}>{a}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p>EXIF metadata intact with zero anomalies.</p>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  );
-                })()}
+                  </div>
+                </div>
 
                 <div className="space-y-1.5 pt-2 border-t border-slate-100 text-xs">
                   <div className="flex justify-between py-1 border-b border-slate-100">
                     <span className="text-slate-500 font-medium">Metric Score:</span>
-                    <span className="font-mono font-bold text-slate-900">{result.score ?? 'N/A'}</span>
+                    <span className="font-mono font-bold text-slate-900">{result.score}</span>
                   </div>
 
                   {Object.entries(result.details || {}).map(([key, val]: [string, any]) => {
-                    if (key === 'anomalies' || key === 'evidence') return null;
+                    if (key === 'anomalies') return null;
                     if (key === 'rawText' && result.details?.formatValid) return null;
                     const formattedVal = typeof val === 'object' ? JSON.stringify(val) : String(val);
                     const truncated = formattedVal.length > 35 ? formattedVal.substring(0, 32) + '...' : formattedVal;
@@ -647,10 +570,11 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
         onCancel={() => setIsDeleteModalOpen(false)}
       />
 
-      {/* Clean Centered Image Inspection Popup Dialog */}
+      {/* Clean Centered Image Inspection Popup Dialog (No Top Whitespace, z-[99999] Viewport Coverage) */}
       {isLightboxOpen && (
         <div
-          className="fixed inset-0 z-[99999] bg-slate-950/85 flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+          className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[99999] bg-slate-950/80 flex items-center justify-center p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-150"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
           onClick={() => setIsLightboxOpen(false)}
         >
           <div
