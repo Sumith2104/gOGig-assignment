@@ -312,7 +312,7 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
               <div className="p-4 rounded-xl bg-slate-900 text-white border border-slate-800 shadow-md space-y-2">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                   <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider flex items-center gap-1.5">
-                    📢 Outdoor Campaign Ad Verification (gOGig Platform)
+                    Outdoor Campaign Ad Verification (gOGig Platform)
                   </span>
                   <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-950 text-emerald-300 border border-emerald-700">
                     Audit Verified
@@ -644,12 +644,12 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
               <div className="flex items-center space-x-3">
                 {ocrResult?.details?.normalizedPlate && (
                   <span className="text-emerald-400 font-mono font-bold text-[11px] bg-emerald-950/80 px-2.5 py-1 border border-emerald-800">
-                    🚘 {ocrResult.details.normalizedPlate}
+                    PLATE: {ocrResult.details.normalizedPlate}
                   </span>
                 )}
                 {ocrResult?.details?.campaignBrand && (
                   <span className="text-amber-400 font-bold text-[11px] bg-slate-900 px-2.5 py-1 border border-slate-700 truncate max-w-[220px]">
-                    📢 {ocrResult.details.campaignBrand}
+                    BRAND: {ocrResult.details.campaignBrand}
                   </span>
                 )}
               </div>

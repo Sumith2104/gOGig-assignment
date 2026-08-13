@@ -148,12 +148,12 @@ export default function GalleryPage() {
                   </span>
                   {img.summary?.campaignBrand && (
                     <span className="px-2.5 py-1 text-[10px] font-black backdrop-blur-md bg-slate-950/90 text-amber-400 border border-amber-500/60 shadow-sm max-w-[190px] truncate" title={img.summary.campaignBrand}>
-                      📢 {img.summary.campaignBrand}
+                      BRAND: {img.summary.campaignBrand}
                     </span>
                   )}
                   {img.summary?.normalizedPlate && (
                     <span className="px-2.5 py-1 text-[10px] font-mono font-bold backdrop-blur-md bg-slate-950/90 text-emerald-300 border border-emerald-500/60 shadow-sm">
-                      🚘 {img.summary.normalizedPlate}
+                      PLATE: {img.summary.normalizedPlate}
                     </span>
                   )}
                 </div>

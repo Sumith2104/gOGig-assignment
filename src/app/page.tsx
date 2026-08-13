@@ -217,14 +217,14 @@ export default function DashboardPage() {
                       <div className="flex flex-col space-y-1">
                         {img.summary?.campaignBrand ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-black bg-slate-900 text-amber-400 border border-slate-700 shadow-xs max-w-[180px] truncate" title={img.summary.campaignBrand}>
-                            📢 {img.summary.campaignBrand}
+                            BRAND: {img.summary.campaignBrand}
                           </span>
                         ) : (
                           <span className="text-[11px] text-slate-400 font-medium">No Campaign Text</span>
                         )}
                         {img.summary?.normalizedPlate && (
                           <span className="inline-flex items-center text-[10px] font-mono font-bold text-slate-700 tracking-wider">
-                            🚘 {img.summary.normalizedPlate}
+                            PLATE: {img.summary.normalizedPlate}
                           </span>
                         )}
                       </div>

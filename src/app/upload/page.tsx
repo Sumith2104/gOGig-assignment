@@ -339,7 +339,7 @@ export default function UploadPage() {
                       <div className="flex items-center space-x-3">
                         <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
                         <span className="text-xs font-bold text-slate-100 tracking-wide">
-                          ⚡ {currentStageText}...
+                          {currentStageText}...
                         </span>
                       </div>
                       <span className="text-[11px] font-mono font-bold text-orange-400 bg-slate-900 px-2.5 py-1 border border-slate-800">
