@@ -647,11 +647,10 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
         onCancel={() => setIsDeleteModalOpen(false)}
       />
 
-      {/* Clean Centered Image Inspection Popup Dialog (No Top Whitespace, z-[99999] Viewport Coverage) */}
+      {/* Clean Centered Image Inspection Popup Dialog */}
       {isLightboxOpen && (
         <div
-          className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[99999] bg-slate-950/80 flex items-center justify-center p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-150"
-          style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
+          className="fixed inset-0 z-[99999] bg-slate-950/85 flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
           onClick={() => setIsLightboxOpen(false)}
         >
           <div

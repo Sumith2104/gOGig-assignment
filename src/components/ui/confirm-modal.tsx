@@ -49,13 +49,12 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
   return (
     <div
-      className="fixed top-0 left-0 right-0 bottom-0 w-screen h-screen z-[99999] bg-slate-950/80 flex items-center justify-center p-4 animate-in fade-in duration-150"
-      style={{ top: 0, left: 0, right: 0, bottom: 0 }}
+      className="fixed inset-0 z-[99999] bg-slate-950/85 flex items-center justify-center p-4"
       onClick={onCancel}
     >
       {/* Modal Dialog Window */}
       <div
-        className="relative w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl transition-all"
+        className="relative w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Icon & Title Header */}
