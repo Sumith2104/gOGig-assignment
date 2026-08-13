@@ -27,6 +27,7 @@
 - [System Assumptions](#-system-assumptions)
 - [Engineering Trade-offs & Production Evolution](#-engineering-trade-offs--production-evolution)
 - [AI Collaboration & Human Engineering Directives](#-ai-collaboration--human-engineering-directives)
+- [Future Roadmap: Agentic Self-Healing Fallbacks](#-future-roadmap-agentic-self-healing-fallbacks)
 - [Bonus Features](#-bonus-features)
 
 ---
@@ -544,6 +545,51 @@ In accordance with the assignment evaluation guidelines, AI tools were utilized 
 1. **Blur Detection Calibration**: Tested the 3×3 Laplacian convolution against 50+ sharp and blurred vehicle photos to determine the optimal variance cutoff ($\sigma = 10.0$) preventing false positives on textured auto-rickshaw canvas tops.
 2. **Perceptual Hash Thresholding**: Evaluated 64-bit dHash Hamming distance thresholds ($d \le 10$ flagged as duplicate, $d > 25$ confirmed unique asset) against rescaled, cropped, and re-compressed test images.
 3. **Fuzzy OCR Substitution Matrix**: Calibrated character confusion matrices ($O \leftrightarrow 0, I \leftrightarrow 1, B \leftrightarrow 8, Z \leftrightarrow 2$) against real-world Indian license plate fonts and ambient lighting reflections.
+
+---
+
+## 🔮 Future Roadmap: Agentic Self-Healing Fallbacks
+
+If allocated additional engineering time, the rule-based and tiered fallback architecture would evolve into an **Autonomous Agentic Media Verification Engine**:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                       AUTONOMOUS AGENTIC VERIFICATION ARCHITECTURE                          │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                             │
+│  1. LLM Supervisor Agent (LangGraph / Tool-Calling Runtime)                                │
+│     • Dynamically evaluates image context (lighting, glare, blur, orientation).             │
+│     • Autonomously orchestrates specialized Computer Vision & OCR tools.                    │
+│                                                                                             │
+│  2. Self-Reflection & Multi-Turn Verification Loop                                         │
+│     • If plate checksum fails or characters are ambiguous (e.g. O vs 0, B vs 8):            │
+│       ↳ Agent triggers adaptive_gamma_tool(bbox) or super_resolution_tool(bbox).            │
+│       ↳ Re-evaluates transformed sub-crop before finalizing the audit.                      │
+│                                                                                             │
+│  3. RAG-Powered Campaign Knowledge Graph Retrieval                                          │
+│     • Resolves ambiguous product sub-brands (e.g., "Sudanta", "Ojasvita") to parent        │
+│       advertisers ("SriSri Tattva") by querying an active outdoor campaign vector store.    │
+│                                                                                             │
+│  4. Closed-Loop Field Operator Feedback                                                     │
+│     • Automatically generates actionable guidance if an image cannot be verified:           │
+│       "Glared plate on bottom-right. Please step back 1 meter and hold steady."             │
+│                                                                                             │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Agentic Capabilities:
+
+1. **Dynamic Tool Calling & Adaptive Preprocessing**:
+   - Rather than static sequential execution, the Supervisor Agent evaluates image telemetry and invokes specialized micro-tools on demand:
+     * `enhance_contrast_tool`: For underexposed nighttime photos.
+     * `crop_vehicle_bumper_tool`: For busy wide-angle shots with background noise.
+     * `query_rto_database_tool`: Validates recognized plate state codes and formats against regional transport authority registries.
+2. **Self-Healing Multi-Turn Verification**:
+   - If an initial OCR reading is low-confidence or format-invalid, the agent doesn't simply fail; it reflects on *why* it failed, formulates an image enhancement hypothesis, runs a targeted visual transformation, and re-evaluates the crop.
+3. **RAG Context Integration for Ad Verification**:
+   - Matches partial logos, promotional slogans, and brand ambassadors (e.g. celebrity faces) against brand guidelines stored in an advertiser knowledge base.
+4. **Autonomous Field Operator Interaction**:
+   - Generates real-time, prescriptive re-capture guidance back to the field operator's mobile application when an image fails unrecoverable quality gates (e.g., severe camera blur or complete plate occlusion).
 
 ---
 
