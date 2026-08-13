@@ -179,6 +179,91 @@ Prerequisites: Node.js v20+, PostgreSQL, Redis running locally.
 
 ---
 
+## 📸 Live Demo & Inspection Reports
+
+> Live Application: **[https://13.234.120.49.sslip.io/images](https://13.234.120.49.sslip.io/images)**
+
+### Image Analysis Gallery
+
+The gallery page displays all uploaded vehicle images with their processing status, detected brand, license plate, and file metadata at a glance.
+
+![Gallery Page — 3 images processed with COMPLETED status](docs/screenshots/gallery_page.png)
+
+---
+
+### Report 1: `3.png` — ARENA ANIMATION / MH12KR1145
+
+| Field | Value |
+|:------|:------|
+| **Image ID** | `6ec0deb2-b595-4d3d-ac07-4b51ce16b83c` |
+| **File Size / Format** | 1.09 MB / PNG |
+| **Processing Time** | 7.86s |
+| **Campaign Brand** | ARENA ANIMATION |
+| **License Plate** | MH12KR1145 |
+| **Overall Quality Score** | **5 / 6 Checks Passed (83%)** |
+
+| Check | Status | Key Metric |
+|:------|:------:|:-----------|
+| Blur Detection | Passed | Laplacian StDev: 16.16 (sharp) |
+| Brightness Analysis | Passed | Mean Luminance: 104.23 (normal) |
+| Duplicate Detection | Passed | Hamming Distance: 30 (not duplicate) |
+| OCR Plate Validation | Passed | MH12KR1145 — Gemini 2.5 Flash Vision |
+| Dimension Validation | Passed | 720x1280, Aspect Ratio: 0.56 |
+| Metadata Analysis | Flagged | Missing camera make/model metadata |
+
+![Report: 3.png — 5/6 checks passed](docs/screenshots/report_3_png.png)
+
+---
+
+### Report 2: `2.png` — Dr Agarwals Eye Hospital / TN05BT5754
+
+| Field | Value |
+|:------|:------|
+| **Image ID** | `585b6e6d-f91f-4dcf-8ec0-e0e093f3fdb7` |
+| **File Size / Format** | 1.62 MB / PNG |
+| **Processing Time** | 9.83s |
+| **Campaign Brand** | Dr Agarwals Eye Hospital |
+| **License Plate** | TN05BT5754 |
+| **Overall Quality Score** | **6 / 6 Checks Passed (100%)** |
+| **GPS Geotag** | Lat: 13.1059115, Lon: 80.2514811 (Visual Watermark Overlay) |
+
+| Check | Status | Key Metric |
+|:------|:------:|:-----------|
+| Blur Detection | Passed | Laplacian StDev: 24.28 (sharp) |
+| Brightness Analysis | Passed | Mean Luminance: 121.28 (normal) |
+| Duplicate Detection | Passed | Hamming Distance: 37 (not duplicate) |
+| OCR Plate Validation | Passed | TN05BT5754 — Gemini 2.5 Flash Vision |
+| Dimension Validation | Passed | 960x1280, Aspect Ratio: 0.75 |
+| Metadata Analysis | Passed | EXIF metadata intact, zero anomalies |
+
+![Report: 2.png — 6/6 checks passed (perfect score)](docs/screenshots/report_2_png.png)
+
+---
+
+### Report 3: `1.png` — ARENA ANIMATION / MH12NW8556
+
+| Field | Value |
+|:------|:------|
+| **Image ID** | `3c617825-168a-4872-b5c6-2a7a1bac1868` |
+| **File Size / Format** | 1.3 MB / PNG |
+| **Processing Time** | 9.30s |
+| **Campaign Brand** | ARENA ANIMATION |
+| **License Plate** | MH12NW8556 |
+| **Overall Quality Score** | **5 / 6 Checks Passed (83%)** |
+
+| Check | Status | Key Metric |
+|:------|:------:|:-----------|
+| Blur Detection | Passed | Laplacian StDev: 25.72 (sharp) |
+| Brightness Analysis | Passed | Mean Luminance: 114.43 (normal) |
+| Duplicate Detection | Passed | Hamming Distance: 64 (not duplicate) |
+| OCR Plate Validation | Passed | MH12NW8556 — Gemini 2.5 Flash Vision |
+| Dimension Validation | Passed | 720x1280, Aspect Ratio: 0.56 |
+| Metadata Analysis | Flagged | Missing camera make/model metadata |
+
+![Report: 1.png — 5/6 checks passed](docs/screenshots/report_1_png.png)
+
+---
+
 ## 📡 API Reference
 
 ### 1. Upload Vehicle Image
