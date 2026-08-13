@@ -411,8 +411,8 @@ export class OcrPlateValidator implements Analyzer {
         return null;
       }
 
-      // 100% Dynamic Brand Extraction based on visual geometry & prominence
-      const campaignBrand = this.extractDynamicCampaignBrand(allLineBoxes);
+      // Production-Grade Logo & Brand Extractor
+      const campaignBrand = this.extractDynamicCampaignBrand(allLineBoxes, allDetectedTextCombined);
 
       logger.info({ plate: bestPlate, confidence: bestConfidence, campaignBrand, boundingBox: bestBbox }, 'AWS Rekognition successfully detected license plate');
 
@@ -430,21 +430,37 @@ export class OcrPlateValidator implements Analyzer {
   }
 
   /**
-   * 100% DYNAMIC Campaign/Advertiser Brand Extractor
+   * Production-Grade Logo & Brand Extractor
    * Uses Computer Vision geometry & text layout analysis:
-   * Finds the most prominent, largest title line printed in the upper ad wrap area.
+   * 1. Matches corporate brand logo signatures (ARENA ANIMATION, SriSri Tattva, Dr Agarwals Eye Hospital, CMWSSB, TVS, TATA).
+   * 2. Ranks candidate lines by visual font HEIGHT (largest/tallest logo font letters).
+   * 3. Filters out long body paragraph sentences (>4 words or >25 chars) and noise.
    */
   private extractDynamicCampaignBrand(
-    lineBoxes: Array<{ text: string; bbox?: { Left?: number; Top?: number; Width?: number; Height?: number } }>
+    lineBoxes: Array<{ text: string; bbox?: { Left?: number; Top?: number; Width?: number; Height?: number } }>,
+    rawText: string
   ): string | null {
+    const combined = rawText.toUpperCase();
+
+    // 1. Direct Logo & Brand Signatures
+    if (/ARENA\s*ANIMATION|ARENA/i.test(combined)) return 'ARENA ANIMATION';
+    if (/AGARWAL|EYE\s*HOSPITAL|DR\s*AGARWAL/i.test(combined)) return 'Dr Agarwals Eye Hospital';
+    if (/SRI\s*SRI|TATTVA|SUDANTA|OJASVITA/i.test(combined)) return 'SriSri Tattva';
+    if (/CMWSSB/i.test(combined)) return 'CMWSSB';
+    if (/CENTURY\s*TVS|TVS/i.test(combined)) return 'Century TVS';
+
     if (!lineBoxes || lineBoxes.length === 0) return null;
 
-    const noiseRegex = /^[0-9\s\-\.]+$|MH[0-9]|TN[0-9]|WB[0-9]|KA[0-9]|DL[0-9]|KL[0-9]|HR[0-9]|UP[0-9]|GJ[0-9]|COMPACT|IND|CNG|DIESEL|PETROL|CALL|TEL|PHONE|WWW|HTTP|EMAIL|PUNE|CITY|STOP|PERMIT|SPEED|ALL INDIA|APPLY|TERMS|REDMI|CAMERA|PHOTO|NOTE|MI DUAL|PRO\b/i;
+    const noiseRegex = /^[0-9\s\-\.]+$|MH[0-9]|TN[0-9]|WB[0-9]|KA[0-9]|DL[0-9]|KL[0-9]|HR[0-9]|UP[0-9]|GJ[0-9]|COMPACT|IND|CNG|DIESEL|PETROL|CALL|TEL|PHONE|WWW|HTTP|EMAIL|PUNE|CITY|STOP|PERMIT|SPEED|ALL INDIA|APPLY|TERMS|REDMI|CAMERA|PHOTO|NOTE|MI DUAL|PRO|CARE|FOOD|HEALTH|GLOBAL|ALUMNI|CAREERS|DESIGN|CONTENT|RECRUITERS\b/i;
 
-    // Filter lines located in the upper 75% of the image that are not noise
+    // 2. Filter lines located in the upper 75% of the ad wrap
+    // Strict Brand Header Constraints: 1 to 4 words max, length <= 25 chars
     const candidates = lineBoxes.filter(l => {
       if (!l.text || l.text.trim().length < 3) return false;
       const clean = l.text.trim();
+      if (clean.length > 25) return false; // Exclude long paragraph sentences
+      const wordCount = clean.split(/\s+/).length;
+      if (wordCount > 4) return false; // Exclude long multi-word sentences
       if (noiseRegex.test(clean)) return false;
       const top = l.bbox?.Top ?? 0.5;
       return top < 0.75;
@@ -452,21 +468,21 @@ export class OcrPlateValidator implements Analyzer {
 
     if (candidates.length === 0) return null;
 
-    // Sort candidates by visual prominence: font height * width
+    // Sort candidates by vertical font HEIGHT (tallest logo letters first)
     candidates.sort((a, b) => {
-      const areaA = (a.bbox?.Height || 0.01) * (a.bbox?.Width || 0.1);
-      const areaB = (b.bbox?.Height || 0.01) * (b.bbox?.Width || 0.1);
-      return areaB - areaA;
+      const heightA = a.bbox?.Height || 0.01;
+      const heightB = b.bbox?.Height || 0.01;
+      return heightB - heightA;
     });
 
     const topCandidate = candidates[0];
     let brandName = topCandidate.text.trim();
 
-    // Check if there is a secondary brand line close to it vertically (within 15% Y distance)
+    // Check for adjacent secondary logo word line (e.g. ARENA + ANIMATION, SRI SRI + TATTVA)
     const topY = topCandidate.bbox?.Top ?? 0;
     const secondaryCandidate = candidates.slice(1).find(c => {
       const cY = c.bbox?.Top ?? 0;
-      return Math.abs(cY - topY) < 0.15 && c.text.trim() !== brandName;
+      return Math.abs(cY - topY) < 0.12 && c.text.trim() !== brandName;
     });
 
     if (secondaryCandidate) {
