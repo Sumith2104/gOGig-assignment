@@ -15,6 +15,7 @@ import {
   Sun,
   Camera,
   Layers,
+  Activity,
 } from 'lucide-react';
 import { formatBytes } from '@/lib/utils';
 
