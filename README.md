@@ -33,7 +33,7 @@
 
 ---
 
-## 🌐 Live Deployment Links
+##  Live Deployment Links
 
 The complete platform is live and deployed on AWS EC2 (`ap-south-1`):
 
@@ -43,17 +43,17 @@ The complete platform is live and deployed on AWS EC2 (`ap-south-1`):
 
 ---
 
-## 🚀 Running Instructions & Bonus Verification
+##  Running Instructions & Bonus Verification
 
-### ⭐️ Bonus Criteria Fulfillments at a Glance
+###  Bonus Criteria Fulfillments at a Glance
 
 This project fulfills **all 3 bonus evaluation criteria** specified in the assignment:
 
 | Bonus Criteria | Status | Single-Command Execution | Description |
 |:---|:---:|:---|:---|
-| 🐳 **Docker Setup** | ✅ Completed | `docker-compose up --build` | Full multi-container orchestration for Web, API, Worker, Redis, and PostgreSQL. |
-| 🌱 **Database Seed Scripts** | ✅ Completed | `npm run db:seed` | Populates initial vehicle image assets, analysis result metrics, and audit history. |
-| 🧪 **Automated Test Suite** | ✅ Completed | `npm test` | Automated test runner verifying all 6 computer vision & OCR analyzer algorithms. |
+|  **Docker Setup** |  Completed | `docker-compose up --build` | Full multi-container orchestration for Web, API, Worker, Redis, and PostgreSQL. |
+|  **Database Seed Scripts** |  Completed | `npm run db:seed` | Populates initial vehicle image assets, analysis result metrics, and audit history. |
+|  **Automated Test Suite** |  Completed | `npm test` | Automated test runner verifying all 6 computer vision & OCR analyzer algorithms. |
 
 ---
 
@@ -124,7 +124,7 @@ The pipeline is engineered with production-grade cloud, AI, and asynchronous tec
 
 ---
 
-## 🏗️ System Architecture
+##  System Architecture
 
 ```mermaid
 graph TB
@@ -179,7 +179,7 @@ graph TB
 
 ---
 
-## 📂 Project Structure
+##  Project Structure
 
 ```
 gOGig/
@@ -253,7 +253,7 @@ gOGig/
 
 ---
 
-## ⚡ Key Technical Capabilities
+##  Key Technical Capabilities
 
 | Capability | Implementation |
 |:-----------|:---------------|
@@ -267,7 +267,7 @@ gOGig/
 
 ---
 
-## 🔬 6-Stage Analysis Pipeline
+##  6-Stage Analysis Pipeline
 
 | Stage | Analyzer | Technique | Fallback |
 |:------|:---------|:----------|:---------|
@@ -280,21 +280,21 @@ gOGig/
 
 ---
 
-## 🧠 AI-Powered OCR & Brand Extraction
+##  AI-Powered OCR & Brand Extraction
 
 The OCR & Plate Validation analyzer uses a **3-tier hybrid AI architecture** for maximum accuracy:
 
 ```
 ┌─────────────────────────────────────────────────────┐
 │  Tier 1: AWS Rekognition (Primary)                  │
-│  • DetectText API for all visible text extraction    │
-│  • Bounding box coordinates for plate localization   │
-│  • Raw OCR text preserved for downstream AI          │
+│  • DetectText API for all visible text extraction   │
+│  • Bounding box coordinates for plate localization  │
+│  • Raw OCR text preserved for downstream AI         │
 ├─────────────────────────────────────────────────────┤
 │  Tier 2: Google Gemini Vision AI                    │
-│  • gemini-2.5-flash → gemini-1.5-flash-001 fallback│
+│  • gemini-2.5-flash → gemini-1.5-flash-001 fallback │
 │  • Image + OCR text → brand name normalization      │
-│  • Semantic understanding of ad copy vs brand logos  │
+│  • Semantic understanding of ad copy vs brand logos │
 ├─────────────────────────────────────────────────────┤
 │  Tier 3: AWS Bedrock (Claude) + CV Geometry         │
 │  • Claude Vision for multimodal brand extraction    │
@@ -311,7 +311,7 @@ The OCR & Plate Validation analyzer uses a **3-tier hybrid AI architecture** for
 
 ---
 
-## 📸 Live Demo & Inspection Reports
+##  Live Demo & Inspection Reports
 
 > **Live EC2 Deployment**: [http://13.234.120.49:3000](http://13.234.120.49:3000) *(SSL Mirror: [https://13.234.120.49.sslip.io](https://13.234.120.49.sslip.io))*
 
@@ -404,7 +404,7 @@ The interactive gallery provides real-time visibility into all ingested vehicles
 
 ---
 
-## 📡 API Reference
+##  API Reference
 
 ### Upload Vehicle Image
 
@@ -508,7 +508,7 @@ GET /api/health
 
 ---
 
-## 📋 System Assumptions
+##  System Assumptions
 
 1. **Input Media Diversity & Compression**:
    - Field agents upload photos captured under uncontrolled outdoor environments (direct sunlight, night glare, motion blur, varying angles).
@@ -521,7 +521,7 @@ GET /api/health
 
 ---
 
-## ⚖️ Engineering Trade-offs & Production Evolution
+##  Engineering Trade-offs & Production Evolution
 
 | Architectural Area | Current Implementation (Take-Home Scope) | Production Evolution (Enterprise Scale) | Rationale & Trade-off Consideration |
 |:---|:---|:---|:---|
@@ -533,23 +533,23 @@ GET /api/health
 
 ---
 
-## 🤖 AI Collaboration & Human Engineering Directives
+##  AI Collaboration & Human Engineering Directives
 
 In accordance with the assignment evaluation guidelines, AI tools were utilized throughout system development. However, the final architecture reflects **strict human-in-the-loop engineering decisions** where automated suggestions were scrutinized, rejected, or re-engineered.
 
-### 🛡️ What the AI Assistant Suggested vs. What the Lead Engineer Enforced
+###  What the AI Assistant Suggested vs. What the Lead Engineer Enforced
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                        HUMAN-IN-THE-LOOP ENGINEERING DIRECTIVES                        │
 ├─────────────────────────────────────────────┬──────────────────────────────────────────┤
-│ ❌ AI Assistant Initial Suggestion          │ ✅ Human Lead Engineer Directive (Enforced)│
+│    AI Assistant Initial Suggestion          │ Human Lead Engineer Directive (Enforced) │
 ├─────────────────────────────────────────────┼──────────────────────────────────────────┤
-│ Single-vendor cloud AI API call for OCR    │ Multi-Service Hybrid Pipeline:           │
+│ Single-vendor cloud AI API call for OCR     │ Multi-Service Hybrid Pipeline:           │
 │ (Single point of failure when throttled).   │ AWS Rekognition (Fast OCR & Bounding Box)│
-│                                             │ ↳ Google Gemini Vision (Semantic Brand)   │
+│                                             │ ↳ Google Gemini Vision (Semantic Brand)  │
 │                                             │ ↳ AWS Bedrock Claude (Fallback AI)       │
-│                                             │ ↳ Native CV Geometry (Guaranteed local)   │
+│                                             │ ↳ Native CV Geometry (Guaranteed local)  │
 ├─────────────────────────────────────────────┼──────────────────────────────────────────┤
 │ Hardcoded regex brand name lists & noisy    │ Zero Hardcoded Dictionaries:             │
 │ word filters (e.g. `ARENA`, `SriSri`, etc.) │ Strictly banned hardcoded word lists.    │
@@ -571,7 +571,7 @@ In accordance with the assignment evaluation guidelines, AI tools were utilized 
 └─────────────────────────────────────────────┴──────────────────────────────────────────┘
 ```
 
-### 🔬 Empirical Calibration & Validation Methods
+###  Empirical Calibration & Validation Methods
 
 1. **Blur Detection Calibration**: Tested the 3×3 Laplacian convolution against 50+ sharp and blurred vehicle photos to determine the optimal variance cutoff ($\sigma = 10.0$) preventing false positives on textured auto-rickshaw canvas tops.
 2. **Perceptual Hash Thresholding**: Evaluated 64-bit dHash Hamming distance thresholds ($d \le 10$ flagged as duplicate, $d > 25$ confirmed unique asset) against rescaled, cropped, and re-compressed test images.
@@ -579,7 +579,7 @@ In accordance with the assignment evaluation guidelines, AI tools were utilized 
 
 ---
 
-## 🔮 Future Roadmap: Agentic Self-Healing Fallbacks
+##  Future Roadmap: Agentic Self-Healing Fallbacks
 
 If allocated additional engineering time, the rule-based and tiered fallback architecture would evolve into an **Autonomous Agentic Media Verification Engine**:
 
@@ -588,17 +588,17 @@ If allocated additional engineering time, the rule-based and tiered fallback arc
 │                       AUTONOMOUS AGENTIC VERIFICATION ARCHITECTURE                          │
 ├─────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                             │
-│  1. LLM Supervisor Agent (LangGraph / Tool-Calling Runtime)                                │
+│  1. LLM Supervisor Agent (LangGraph / Tool-Calling Runtime)                                 │
 │     • Dynamically evaluates image context (lighting, glare, blur, orientation).             │
 │     • Autonomously orchestrates specialized Computer Vision & OCR tools.                    │
 │                                                                                             │
-│  2. Self-Reflection & Multi-Turn Verification Loop                                         │
+│  2. Self-Reflection & Multi-Turn Verification Loop                                          │
 │     • If plate checksum fails or characters are ambiguous (e.g. O vs 0, B vs 8):            │
 │       ↳ Agent triggers adaptive_gamma_tool(bbox) or super_resolution_tool(bbox).            │
 │       ↳ Re-evaluates transformed sub-crop before finalizing the audit.                      │
 │                                                                                             │
 │  3. RAG-Powered Campaign Knowledge Graph Retrieval                                          │
-│     • Resolves ambiguous product sub-brands (e.g., "Sudanta", "Ojasvita") to parent        │
+│     • Resolves ambiguous product sub-brands (e.g., "Sudanta", "Ojasvita") to parent         │
 │       advertisers ("SriSri Tattva") by querying an active outdoor campaign vector store.    │
 │                                                                                             │
 │  4. Closed-Loop Field Operator Feedback                                                     │
@@ -621,18 +621,6 @@ If allocated additional engineering time, the rule-based and tiered fallback arc
    - Matches partial logos, promotional slogans, and brand ambassadors (e.g. celebrity faces) against brand guidelines stored in an advertiser knowledge base.
 4. **Autonomous Field Operator Interaction**:
    - Generates real-time, prescriptive re-capture guidance back to the field operator's mobile application when an image fails unrecoverable quality gates (e.g., severe camera blur or complete plate occlusion).
-
----
-
-## ⭐ Bonus Features
-
-This project fulfills **all 3 bonus evaluation criteria**:
-
-| Bonus Requirement | Implementation Details | Verification Command |
-|:---|:---|:---|
-| 🐳 **Docker Setup** | Multi-container production (`docker-compose.yml`) & hot-reloading development (`docker-compose.dev.yml`) | `docker-compose up --build` |
-| 🌱 **Database Seed** | Automated database seeding script populating initial vehicle records & analyzer history | `npm run db:seed` |
-| 🧪 **Automated Test Suite** | Programmatic unit & integration test runner validating all 6 analyzer algorithms | `npm test` |
 
 ---
 
