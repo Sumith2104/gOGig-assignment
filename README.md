@@ -15,6 +15,7 @@
 
 ## Table of Contents
 
+- [Live Deployment Links](#-live-deployment-links)
 - [Running Instructions & Bonus Verification](#-running-instructions--bonus-verification)
 - [Services & Technology Stack](#-services--technology-stack)
 - [System Architecture](#-system-architecture)
@@ -29,6 +30,21 @@
 - [AI Collaboration & Human Engineering Directives](#-ai-collaboration--human-engineering-directives)
 - [Future Roadmap: Agentic Self-Healing Fallbacks](#-future-roadmap-agentic-self-healing-fallbacks)
 - [Bonus Features](#-bonus-features)
+
+---
+
+## 🌐 Live Deployment Links
+
+The complete platform is live and publicly accessible on AWS EC2 with automatic SSL termination:
+
+| Portal / Service | Live URL | Description |
+|:---|:---|:---|
+| 📊 **Main Monitoring Dashboard** | **[https://13.234.120.49.sslip.io](https://13.234.120.49.sslip.io)** | Real-time queue metrics, recent ingestion stream, and analyzer health. |
+| 🖼️ **Image Analysis Gallery** | **[https://13.234.120.49.sslip.io/images](https://13.234.120.49.sslip.io/images)** | Visual grid of all audited vehicles with brand & license plate tags. |
+| 📤 **Vehicle Upload Portal** | **[https://13.234.120.49.sslip.io/upload](https://13.234.120.49.sslip.io/upload)** | Field operator upload interface with drag-and-drop & live stage ticker. |
+| 🩺 **System Health Check API** | **[https://13.234.120.49.sslip.io/api/health](https://13.234.120.49.sslip.io/api/health)** | Live JSON health check for PostgreSQL, Redis, and storage. |
+
+> *Direct HTTP IP fallback*: `http://13.234.120.49:3000`
 
 ---
 
