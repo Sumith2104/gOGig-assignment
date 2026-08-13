@@ -19,14 +19,7 @@ export class OcrPlateValidator implements Analyzer {
   private extractCandidates(rawText: string): string[] {
     const candidates: string[] = [];
     const textWithoutExt = rawText.replace(/\.(png|jpg|jpeg|webp)$/i, '');
-
-    // Ignore watermarks, header noise, date noise, vehicle badge noise (IND/AND, CNG, etc.)
-    const filteredText = textWithoutExt.replace(
-      /TUESDAY|MONDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY|JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|LAT|LONG|AM|PM|FREE|ENTRY|APPOINTMENT|CALL|IND|AND|CNG|INDIA|GOVT|COMMERCIAL|STOP|TASK/gi,
-      ' '
-    );
-
-    const cleaned = filteredText.toUpperCase().replace(/[^A-Z0-9\s]/g, ' ');
+    const cleaned = textWithoutExt.toUpperCase().replace(/[^A-Z0-9\s]/g, ' ');
     const tokens = cleaned.split(/\s+/).filter(Boolean);
 
     candidates.push(...tokens);
@@ -534,7 +527,7 @@ Compare BOTH the image and the extracted text to identify the primary corporate 
       return null;
     }
 
-    const noiseRegex = /^[0-9\s\-\.]+$|[^a-zA-Z0-9\s\-\.&]|MH[0-9]|TN[0-9]|WB[0-9]|KA[0-9]|DL[0-9]|KL[0-9]|HR[0-9]|UP[0-9]|GJ[0-9]|COMPACT|IND|CNG|DIESEL|PETROL|CALL|TEL|PHONE|WWW|HTTP|EMAIL|PUNE|CITY|STOP|PERMIT|SPEED|ALL INDIA|APPLY|TERMS|REDMI|CAMERA|PHOTO|NOTE|MI DUAL|PRO|CARE|FOOD|HEALTH|GLOBAL|ALUMNI|CAREERS|DESIGN|CONTENT|RECRUITERS|CREATIVITY|LEADER|LEARN\b/i;
+    const noiseRegex = /^[0-9\s\-\.]+$|https?:\/\/|www\.|\b\w+@\w+\b/i;
 
     // 1. Filter text lines located in upper 70% of the ad wrap
     const candidates = lineBoxes.map(l => ({
