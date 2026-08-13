@@ -15,21 +15,21 @@
 
 ## Table of Contents
 
-- [Live Deployment Links](#-live-deployment-links)
-- [Running Instructions & Bonus Verification](#-running-instructions--bonus-verification)
-- [Services & Technology Stack](#-services--technology-stack)
-- [System Architecture](#-system-architecture)
-- [Project Structure](#-project-structure)
-- [Key Technical Capabilities](#-key-technical-capabilities)
-- [Analysis Pipeline](#-6-stage-analysis-pipeline)
-- [AI-Powered OCR & Brand Extraction](#-ai-powered-ocr--brand-extraction)
-- [Live Demo & Inspection Reports](#-live-demo--inspection-reports)
-- [API Reference](#-api-reference)
-- [System Assumptions](#-system-assumptions)
-- [Engineering Trade-offs & Production Evolution](#-engineering-trade-offs--production-evolution)
-- [AI Collaboration & Human Engineering Directives](#-ai-collaboration--human-engineering-directives)
-- [Future Roadmap: Agentic Self-Healing Fallbacks](#-future-roadmap-agentic-self-healing-fallbacks)
-- [Bonus Features](#-bonus-features)
+- [Live Deployment Links](#live-deployment-links)
+- [Running Instructions & Bonus Verification](#running-instructions--bonus-verification)
+- [Services & Technology Stack](#services--technology-stack)
+- [System Architecture](#system-architecture)
+- [Project Structure](#project-structure)
+- [Key Technical Capabilities](#key-technical-capabilities)
+- [6-Stage Analysis Pipeline](#6-stage-analysis-pipeline)
+- [AI-Powered OCR & Brand Extraction](#ai-powered-ocr--brand-extraction)
+- [Live Demo & Inspection Reports](#live-demo--inspection-reports)
+- [API Reference](#api-reference)
+- [System Assumptions](#system-assumptions)
+- [Engineering Trade-offs & Production Evolution](#engineering-trade-offs--production-evolution)
+- [AI Collaboration & Human Engineering Directives](#ai-collaboration--human-engineering-directives)
+- [Future Roadmap: Agentic Self-Healing Fallbacks](#future-roadmap-agentic-self-healing-fallbacks)
+- [Bonus Features](#bonus-features)
 
 ---
 
