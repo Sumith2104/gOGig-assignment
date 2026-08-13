@@ -179,7 +179,7 @@ export class OcrPlateValidator implements Analyzer {
 "plateNumber": normalized uppercase string without spaces/hyphens (e.g. "MH12KR1145", "HR55U0390", "TN05BT5754", "MH12NW8556"), or null if no plate present,
 "campaignBrand": prominent advertisement brand name, slogan, or campaign title visible on the vehicle hood wrap/banner (e.g. "ARENA ANIMATION", "PUNE-FC ROAD 7755900813"), or null if none,
 "rawText": unmodified exact printed text,
-"boundingBox": object with keys "leftPercent", "topPercent", "widthPercent", "heightPercent" (numbers between 0 and 100 representing bounding box location),
+"boundingBox": object with keys "leftPercent", "topPercent", "widthPercent", "heightPercent" (numbers representing EXACT tight bounding box around ONLY the license plate rectangle. License plate height is typically only 8% to 12% of image height. E.g., for auto-rickshaws: leftPercent: 56, topPercent: 57, widthPercent: 24, heightPercent: 10),
 "confidence": confidence score between 0.0 and 1.0,
 "plateColor": string like "yellow" or "white".`;
 
@@ -243,11 +243,12 @@ export class OcrPlateValidator implements Analyzer {
 
         let bbox: { left: number; top: number; width: number; height: number } | undefined;
         if (parsed.boundingBox && typeof parsed.boundingBox.leftPercent === 'number') {
+          const clampedHeightPct = Math.min(parsed.boundingBox.heightPercent || 10, 12);
           bbox = {
             left: Math.floor((parsed.boundingBox.leftPercent / 100) * width),
             top: Math.floor((parsed.boundingBox.topPercent / 100) * height),
             width: Math.floor((parsed.boundingBox.widthPercent / 100) * width),
-            height: Math.floor((parsed.boundingBox.heightPercent / 100) * height),
+            height: Math.floor((clampedHeightPct / 100) * height),
           };
         }
 
@@ -284,15 +285,16 @@ export class OcrPlateValidator implements Analyzer {
       const metadata = await sharp(buffer).metadata();
       const width = metadata.width || 800;
       const height = metadata.height || 800;
+      const isPortrait = height > width;
 
       // Check Gemini Vision AI first if API key configured
       const geminiResult = await this.performGeminiVisionOCR(buffer, width, height);
       if (geminiResult && geminiResult.plateNumber) {
         const bbox = geminiResult.boundingBox || {
-          left: Math.floor(width * 0.40),
-          top: Math.floor(height * 0.62),
-          width: Math.floor(width * 0.50),
-          height: Math.floor(height * 0.25),
+          left: Math.floor(width * (isPortrait ? 0.56 : 0.40)),
+          top: Math.floor(height * (isPortrait ? 0.57 : 0.65)),
+          width: Math.floor(width * (isPortrait ? 0.25 : 0.35)),
+          height: Math.floor(height * (isPortrait ? 0.10 : 0.12)),
         };
         return {
           text: geminiResult.rawText || geminiResult.plateNumber,
@@ -308,7 +310,6 @@ export class OcrPlateValidator implements Analyzer {
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -.',
       });
 
-      const isPortrait = height > width;
       const aspectRatio = width / height;
       logger.info({ width, height, isPortrait, aspectRatio: aspectRatio.toFixed(2) }, 'OCR image orientation detected');
 
