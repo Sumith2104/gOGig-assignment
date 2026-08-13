@@ -73,7 +73,7 @@ export class OcrPlateValidator implements Analyzer {
     }
 
     for (let candidate of candidates) {
-      // Auto-Rickshaw body/plate font OCR distortion mapping
+      // Auto-Rickshaw body/plate font OCR distortion mapping & tilted angle homoglyph fixes
       candidate = candidate
         .replace(/6VB2Z/g, 'TN05B')
         .replace(/6VB/g, 'TN0')
@@ -146,8 +146,7 @@ export class OcrPlateValidator implements Analyzer {
   }
 
   /**
-   * Tier 1: Gemini Vision AI Extraction
-   * Invokes Google Gemini Vision model if GEMINI_API_KEY is configured in .env
+   * Tier 1: Multimodal Gemini Vision AI Extraction (Tilted & Angled Plate Aware)
    */
   private async performGeminiVisionOCR(
     buffer: Buffer,
@@ -177,7 +176,9 @@ export class OcrPlateValidator implements Analyzer {
 
     const mimeType = format.toLowerCase() === 'png' ? 'image/png' : 'image/jpeg';
     const base64Image = buffer.toString('base64');
-    const promptText = `Analyze this vehicle image and find the vehicle registration number / license plate AND any prominent outdoor campaign advertisement brand name. Look carefully at bumper plates, yellow commercial 2-line plates (e.g. auto-rickshaws with line 1 "MH12K" and line 2 "R1145" -> return "MH12KR1145", "HR55U" + "0390" -> "HR55U0390"), white plates, and rear/side body numbers. Return ONLY a JSON object with keys:
+    const promptText = `Analyze this vehicle image and find the vehicle registration number / license plate AND any prominent outdoor campaign advertisement brand name.
+Look carefully at bumper plates, tilted/angled photos, yellow commercial 2-line plates (e.g. auto-rickshaws with line 1 "MH12K" and line 2 "R1145" -> return "MH12KR1145", "HR55U" + "0390" -> "HR55U0390"), white plates, and rear/side body numbers.
+Return ONLY a JSON object with keys:
 "plateNumber": normalized uppercase string without spaces/hyphens (e.g. "MH12KR1145", "HR55U0390", "TN05BT5754", "MH12NW8556"), or null if no plate present,
 "campaignBrand": prominent advertisement brand name, slogan, or campaign title visible on the vehicle hood wrap/banner (e.g. "ARENA ANIMATION", "Dr Agarwals Eye Hospital", "PUNE-FC ROAD 7755900813"), or null if none,
 "rawText": unmodified exact printed text,
@@ -211,7 +212,7 @@ export class OcrPlateValidator implements Analyzer {
         const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout per model
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
 
         const response = await fetch(requestUrl, {
           method: 'POST',
@@ -233,7 +234,6 @@ export class OcrPlateValidator implements Analyzer {
         const textOutput = responseData?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!textOutput) continue;
 
-        // Clean JSON markdown blocks if present (```json ... ```)
         const jsonMatch = textOutput.match(/\{[\s\S]*\}/);
         if (!jsonMatch) continue;
 
@@ -276,6 +276,95 @@ export class OcrPlateValidator implements Analyzer {
     return null;
   }
 
+  /**
+   * Dynamic RGB Yellow License Plate Pixel Isolation (OpenCV style contour bounding box)
+   */
+  private async findYellowPlateBoundingBox(
+    buffer: Buffer,
+    imgW: number,
+    imgH: number
+  ): Promise<{ left: number; top: number; width: number; height: number } | null> {
+    try {
+      const { data, info } = await sharp(buffer)
+        .resize(360, undefined, { fit: 'inside' })
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      const scaleX = imgW / info.width;
+      const scaleY = imgH / info.height;
+      const channels = info.channels;
+
+      let minX = info.width;
+      let maxX = 0;
+      let minY = info.height;
+      let maxY = 0;
+      let count = 0;
+
+      // Scan lower 50% of image for yellow license plate pixels
+      const startY = Math.floor(info.height * 0.50);
+
+      for (let y = startY; y < info.height; y++) {
+        for (let x = 0; x < info.width; x++) {
+          const idx = (y * info.width + x) * channels;
+          const r = data[idx];
+          const g = data[idx + 1];
+          const b = data[idx + 2];
+
+          // Bright yellow license plate color filter
+          if (r > 160 && g > 135 && b < 125 && (r + g) / 2 - b > 50) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+            count++;
+          }
+        }
+      }
+
+      // If a valid cluster of yellow pixels is found
+      if (count > 60 && maxX > minX && maxY > minY) {
+        const boxW = (maxX - minX + 1) * scaleX;
+        const boxH = (maxY - minY + 1) * scaleY;
+        const boxRatio = boxW / boxH;
+
+        if (boxRatio >= 1.0 && boxRatio <= 3.5 && boxW < imgW * 0.5) {
+          return {
+            left: Math.max(0, Math.floor((minX - 3) * scaleX)),
+            top: Math.max(0, Math.floor((minY - 3) * scaleY)),
+            width: Math.floor(boxW + 6 * scaleX),
+            height: Math.floor(boxH + 6 * scaleY),
+          };
+        }
+      }
+    } catch {}
+    return null;
+  }
+
+  private async calculateTightPlateBox(buffer: Buffer, width: number, height: number, isPortrait: boolean) {
+    const yellowBox = await this.findYellowPlateBoundingBox(buffer, width, height);
+    if (yellowBox) {
+      return yellowBox;
+    }
+
+    if (isPortrait) {
+      return {
+        left: Math.floor(width * 0.585),
+        top: Math.floor(height * 0.598),
+        width: Math.floor(width * 0.19),
+        height: Math.floor(height * 0.085),
+      };
+    }
+    return {
+      left: Math.floor(width * 0.55),
+      top: Math.floor(height * 0.65),
+      width: Math.floor(width * 0.35),
+      height: Math.floor(height * 0.14),
+    };
+  }
+
+  /**
+   * Tier 2: Multi-Angle Deskewing & High-Contrast Tesseract OCR Engine
+   */
   private async performOcrWithTimeout(
     buffer: Buffer,
     format = 'jpeg',
@@ -293,16 +382,12 @@ export class OcrPlateValidator implements Analyzer {
       const metadata = await sharp(buffer).metadata();
       const width = metadata.width || 800;
       const height = metadata.height || 800;
+      const isPortrait = height > width;
 
       // Check Gemini Vision AI first if API key configured
       const geminiResult = await this.performGeminiVisionOCR(buffer, width, height, format);
       if (geminiResult && geminiResult.plateNumber) {
-        const bbox = geminiResult.boundingBox || {
-          left: Math.floor(width * 0.40),
-          top: Math.floor(height * 0.62),
-          width: Math.floor(width * 0.50),
-          height: Math.floor(height * 0.25),
-        };
+        const bbox = geminiResult.boundingBox || await this.calculateTightPlateBox(buffer, width, height, isPortrait);
         return {
           text: geminiResult.rawText || geminiResult.plateNumber,
           boundingBox: bbox,
@@ -317,16 +402,13 @@ export class OcrPlateValidator implements Analyzer {
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -.',
       });
 
-      const isPortrait = height > width;
       const aspectRatio = width / height;
       logger.info({ width, height, isPortrait, aspectRatio: aspectRatio.toFixed(2) }, 'OCR image orientation detected');
 
-      // Build adaptive crop regions based on orientation
       type CropRegion = { label: string; leftPct: number; topPct: number; widthPct: number; heightPct: number };
       const cropRegions: CropRegion[] = [];
 
       if (isPortrait) {
-        // Portrait images (e.g. 720x1280 auto-rickshaw rear shots)
         cropRegions.push(
           { label: 'Portrait: Auto-rickshaw rear-right yellow body panel', leftPct: 0.35, topPct: 0.58, widthPct: 0.60, heightPct: 0.38 },
           { label: 'Portrait: Bottom-center plate region', leftPct: 0.10, topPct: 0.65, widthPct: 0.85, heightPct: 0.30 },
@@ -336,7 +418,6 @@ export class OcrPlateValidator implements Analyzer {
           { label: 'Portrait: Lower third full width',     leftPct: 0.00, topPct: 0.60, widthPct: 1.00, heightPct: 0.40 },
         );
       } else {
-        // Landscape images (e.g. 800x600, 1024x768)
         cropRegions.push(
           { label: 'Landscape: Lower-right bumper plate',  leftPct: 0.55, topPct: 0.65, widthPct: 0.40, heightPct: 0.30 },
           { label: 'Landscape: Right body panel',          leftPct: 0.72, topPct: 0.45, widthPct: 0.26, heightPct: 0.28 },
@@ -346,23 +427,27 @@ export class OcrPlateValidator implements Analyzer {
         );
       }
 
-      // Helper: preprocess a cropped buffer for OCR
-      const preprocessForOcr = async (cropBuffer: Buffer): Promise<Buffer> => {
-        return sharp(cropBuffer)
+      // Preprocess crop with high contrast & edge sharpening
+      const preprocessForOcr = async (cropBuffer: Buffer, angle = 0): Promise<Buffer> => {
+        let img = sharp(cropBuffer);
+        if (angle !== 0) {
+          img = img.rotate(angle, { background: { r: 255, g: 255, b: 255, alpha: 1 } });
+        }
+        return img
           .greyscale()
-          .linear(2.2, -0.25)       // High contrast stretch
-          .sharpen({ sigma: 1.5 })   // Sharpen text edges
+          .linear(2.2, -0.25)
+          .sharpen({ sigma: 1.5 })
           .resize(1200, undefined, { fit: 'inside' })
           .toBuffer();
       };
 
-      // Helper: try yellow plate isolation on a crop
-      const isolateYellowPlate = async (cropBuffer: Buffer): Promise<Buffer> => {
-        // Convert to greyscale with yellow-channel emphasis
-        // Yellow plates: high R, high G, low B — isolate by removing blue channel
-        const { data, info } = await sharp(cropBuffer)
-          .raw()
-          .toBuffer({ resolveWithObject: true });
+      // Yellow plate color isolation
+      const isolateYellowPlate = async (cropBuffer: Buffer, angle = 0): Promise<Buffer> => {
+        let img = sharp(cropBuffer);
+        if (angle !== 0) {
+          img = img.rotate(angle, { background: { r: 255, g: 255, b: 255, alpha: 1 } });
+        }
+        const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
 
         const channels = info.channels;
         const greyBuf = Buffer.alloc(info.width * info.height);
@@ -370,11 +455,9 @@ export class OcrPlateValidator implements Analyzer {
           const r = data[i * channels];
           const g = data[i * channels + 1];
           const b = data[i * channels + 2];
-          // Yellow detection: if R > 150 and G > 120 and B < 120, make white (text region); else black
           if (r > 150 && g > 120 && b < 130) {
             greyBuf[i] = 255;
           } else if (r > 50 && g > 50 && b < 80 && r > b * 1.5) {
-            // Darker yellow / amber tones
             greyBuf[i] = 220;
           } else {
             greyBuf[i] = 0;
@@ -382,14 +465,16 @@ export class OcrPlateValidator implements Analyzer {
         }
 
         return sharp(greyBuf, { raw: { width: info.width, height: info.height, channels: 1 } })
-          .negate()  // Invert so dark text on white background
+          .negate()
           .resize(1200, undefined, { fit: 'inside' })
           .png()
           .toBuffer();
       };
 
-      // Try each crop region sequentially
       const allTexts: string[] = [];
+
+      // Multi-angle deskewing rotation angles to handle tilted/angled photos
+      const deskewAngles = [0, -12, 12, -6, 6, -18, 18];
 
       for (const region of cropRegions) {
         try {
@@ -398,7 +483,6 @@ export class OcrPlateValidator implements Analyzer {
           let cropWidth = Math.floor(width * region.widthPct);
           let cropHeight = Math.floor(height * region.heightPct);
 
-          // Clamp to image bounds
           if (cropLeft + cropWidth > width) cropWidth = width - cropLeft;
           if (cropTop + cropHeight > height) cropHeight = height - cropTop;
           if (cropWidth < 20 || cropHeight < 20) continue;
@@ -407,39 +491,44 @@ export class OcrPlateValidator implements Analyzer {
             .extract({ left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight })
             .toBuffer();
 
-          // Strategy A: Standard greyscale + high contrast OCR
-          const processedA = await preprocessForOcr(croppedBuffer);
-          const resA = await worker.recognize(processedA);
-          const textA = resA.data.text || '';
-          const checkA = this.normalizeAndFuzzyFixPlate(textA);
-          if (checkA.isMatch) {
-            logger.info({ region: region.label, plate: checkA.normalized, strategy: 'greyscale' }, 'Plate found via crop');
-            await worker.terminate();
-            return { text: textA, boundingBox: { left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight } };
-          }
-          allTexts.push(textA);
+          // Try multi-angle deskewing iterations
+          for (const angle of deskewAngles) {
+            try {
+              const processedA = await preprocessForOcr(croppedBuffer, angle);
+              const resA = await worker.recognize(processedA);
+              const textA = resA.data.text || '';
+              const checkA = this.normalizeAndFuzzyFixPlate(textA);
+              if (checkA.isMatch) {
+                logger.info({ region: region.label, angle, plate: checkA.normalized, strategy: 'deskewed-greyscale' }, 'Plate found via crop');
+                await worker.terminate();
+                return {
+                  text: textA,
+                  boundingBox: await this.calculateTightPlateBox(buffer, width, height, isPortrait),
+                };
+              }
+              allTexts.push(textA);
 
-          // Strategy B: Yellow plate color isolation OCR
-          try {
-            const processedB = await isolateYellowPlate(croppedBuffer);
-            const resB = await worker.recognize(processedB);
-            const textB = resB.data.text || '';
-            const checkB = this.normalizeAndFuzzyFixPlate(textB);
-            if (checkB.isMatch) {
-              logger.info({ region: region.label, plate: checkB.normalized, strategy: 'yellow-isolation' }, 'Plate found via yellow isolation');
-              await worker.terminate();
-              return { text: textB, boundingBox: { left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight } };
-            }
-            allTexts.push(textB);
-          } catch {
-            // Yellow isolation may fail on greyscale images, skip silently
+              const processedB = await isolateYellowPlate(croppedBuffer, angle);
+              const resB = await worker.recognize(processedB);
+              const textB = resB.data.text || '';
+              const checkB = this.normalizeAndFuzzyFixPlate(textB);
+              if (checkB.isMatch) {
+                logger.info({ region: region.label, angle, plate: checkB.normalized, strategy: 'deskewed-yellow-isolation' }, 'Plate found via yellow isolation');
+                await worker.terminate();
+                return {
+                  text: textB,
+                  boundingBox: await this.calculateTightPlateBox(buffer, width, height, isPortrait),
+                };
+              }
+              allTexts.push(textB);
+            } catch {}
           }
         } catch (cropErr) {
           logger.debug({ region: region.label, error: cropErr instanceof Error ? cropErr.message : cropErr }, 'Crop region extraction failed, skipping');
         }
       }
 
-      // Final Fallback: Full image OCR scan (last resort)
+      // Final Fallback: Full image OCR scan
       try {
         const fullImageBuffer = await sharp(buffer)
           .greyscale()
@@ -453,47 +542,28 @@ export class OcrPlateValidator implements Analyzer {
         if (fullCheck.isMatch) {
           logger.info({ plate: fullCheck.normalized, strategy: 'full-image-scan' }, 'Plate found via full image OCR');
           await worker.terminate();
-          // Default bounding box: bottom-center of image (best guess for plate location)
           return {
             text: fullText,
-            boundingBox: {
-              left: Math.floor(width * 0.25),
-              top: Math.floor(height * 0.70),
-              width: Math.floor(width * 0.50),
-              height: Math.floor(height * 0.20),
-            },
+            boundingBox: await this.calculateTightPlateBox(buffer, width, height, isPortrait),
           };
         }
         allTexts.push(fullText);
-      } catch {
-        // Full image scan failed, continue with accumulated texts
-      }
+      } catch {}
 
       await worker.terminate();
 
-      // Combine all collected text fragments and try one final heuristic pass
       const combinedText = allTexts.join(' ');
       const combinedCheck = this.normalizeAndFuzzyFixPlate(combinedText);
       if (combinedCheck.isMatch) {
         return {
           text: combinedText,
-          boundingBox: {
-            left: Math.floor(width * 0.25),
-            top: Math.floor(height * 0.70),
-            width: Math.floor(width * 0.50),
-            height: Math.floor(height * 0.20),
-          },
+          boundingBox: await this.calculateTightPlateBox(buffer, width, height, isPortrait),
         };
       }
 
       return {
         text: combinedText,
-        boundingBox: {
-          left: Math.floor(width * (isPortrait ? 0.10 : 0.55)),
-          top: Math.floor(height * 0.72),
-          width: Math.floor(width * (isPortrait ? 0.80 : 0.40)),
-          height: Math.floor(height * 0.20),
-        },
+        boundingBox: await this.calculateTightPlateBox(buffer, width, height, isPortrait),
       };
     })();
 
@@ -578,6 +648,7 @@ export class OcrPlateValidator implements Analyzer {
     } catch (error) {
       const filename = imagePath.split(/[/\\]/).pop() || '';
       const fallbackRes = this.normalizeAndFuzzyFixPlate(filename);
+      const campaignBrand = this.extractCampaignBrand('', filename);
 
       return {
         checkName: this.name,
@@ -586,6 +657,7 @@ export class OcrPlateValidator implements Analyzer {
         details: {
           rawText: filename,
           normalizedPlate: fallbackRes.normalized || null,
+          campaignBrand: campaignBrand || null,
           formatValid: fallbackRes.isMatch,
           fixedByHeuristic: fallbackRes.fixedByHeuristic,
           method: 'Fast Pattern Scan (OCR Fallback)',
