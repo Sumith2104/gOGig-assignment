@@ -201,7 +201,7 @@ export default function DashboardPage() {
                   <th className="pb-3 px-3">Campaign / Plate</th>
                   <th className="pb-3 px-3">Size</th>
                   <th className="pb-3 px-3">Status</th>
-                  <th className="pb-3 px-3">Checks Passed</th>
+                  <th className="pb-3 px-3">Inspection Summary</th>
                   <th className="pb-3 px-3">Uploaded</th>
                   <th className="pb-3 px-3 text-right">Action</th>
                 </tr>
