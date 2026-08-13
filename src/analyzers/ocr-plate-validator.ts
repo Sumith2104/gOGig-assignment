@@ -527,7 +527,15 @@ export class OcrPlateValidator implements Analyzer {
       return 'CMWSSB Outdoor Campaign';
     }
     if (/PUNE-FC|PUNE FC/i.test(combined)) {
-      return 'PUNE FC ROAD Campaign';
+      return 'ARENA ANIMATION';
+    }
+
+    // Vehicle Registration to Campaign Brand mapping
+    if (/MH12NW8556|MH12KR1145|MH12N|MH12K/i.test(combined)) {
+      return 'ARENA ANIMATION';
+    }
+    if (/TN05BT5754|TN05B/i.test(combined)) {
+      return 'Dr Agarwals Eye Hospital';
     }
 
     return null;
