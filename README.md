@@ -35,22 +35,11 @@
 
 ## 🌐 Live Deployment Links
 
-The complete platform is live and deployed on AWS EC2 (`ap-south-1`). Access all application views via any of the following live endpoints:
+The complete platform is live and deployed on AWS EC2 (`ap-south-1`):
 
-### 1. 🔒 HTTPS Endpoints (Auto-SSL via sslip.io)
-- **📊 Main Monitoring Dashboard**: [https://13.234.120.49.sslip.io](https://13.234.120.49.sslip.io)
-- **🖼️ Image Analysis Gallery**: [https://13.234.120.49.sslip.io/images](https://13.234.120.49.sslip.io/images)
-- **📤 Vehicle Upload Portal**: [https://13.234.120.49.sslip.io/upload](https://13.234.120.49.sslip.io/upload)
-
-### 2. ⚡ Direct EC2 Public IP Links (HTTP :3000)
-- **📊 Main Monitoring Dashboard**: [http://13.234.120.49:3000](http://13.234.120.49:3000)
-- **🖼️ Image Analysis Gallery**: [http://13.234.120.49:3000/images](http://13.234.120.49:3000/images)
-- **📤 Vehicle Upload Portal**: [http://13.234.120.49:3000/upload](http://13.234.120.49:3000/upload)
-
-### 3. 🌐 AWS Public DNS Links (Direct Compute DNS)
-- **📊 Main Monitoring Dashboard**: [http://ec2-13-234-120-49.ap-south-1.compute.amazonaws.com:3000](http://ec2-13-234-120-49.ap-south-1.compute.amazonaws.com:3000)
-- **🖼️ Image Analysis Gallery**: [http://ec2-13-234-120-49.ap-south-1.compute.amazonaws.com:3000/images](http://ec2-13-234-120-49.ap-south-1.compute.amazonaws.com:3000/images)
-- **📤 Vehicle Upload Portal**: [http://ec2-13-234-120-49.ap-south-1.compute.amazonaws.com:3000/upload](http://ec2-13-234-120-49.ap-south-1.compute.amazonaws.com:3000/upload)
+- **HTTPS (Auto-SSL)**: [https://13.234.120.49.sslip.io](https://13.234.120.49.sslip.io)
+- **Direct EC2 HTTP**: [http://13.234.120.49:3000](http://13.234.120.49:3000)
+- **AWS Public DNS**: [http://ec2-13-234-120-49.ap-south-1.compute.amazonaws.com:3000](http://ec2-13-234-120-49.ap-south-1.compute.amazonaws.com:3000)
 
 ---
 
