@@ -167,11 +167,8 @@ export class OcrPlateValidator implements Analyzer {
       return null;
     }
 
-    // Best production vision models ordered by speed & availability
-    const candidateModels = [
-      'gemini-2.5-flash',
-      'gemini-1.5-flash',
-    ];
+    // Best production vision model
+    const candidateModels = ['gemini-2.5-flash'];
 
     const base64Image = buffer.toString('base64');
     const promptText = `Analyze this vehicle image and find the vehicle registration number / license plate AND any prominent outdoor campaign advertisement brand name. Look carefully at bumper plates, yellow commercial 2-line plates (e.g. auto-rickshaws with line 1 "MH12K" and line 2 "R1145" -> return "MH12KR1145", "HR55U" + "0390" -> "HR55U0390"), white plates, and rear/side body numbers. Return ONLY a JSON object with keys:
@@ -208,7 +205,7 @@ export class OcrPlateValidator implements Analyzer {
         const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout per model
+        const timeoutId = setTimeout(() => controller.abort(), 2500); // 2.5s fast timeout
 
         const response = await fetch(requestUrl, {
           method: 'POST',
@@ -222,12 +219,8 @@ export class OcrPlateValidator implements Analyzer {
         if (!response.ok) {
           let errorBody = '';
           try { errorBody = await response.text(); } catch {}
-          logger.warn({ modelName, status: response.status, body: errorBody.substring(0, 300) }, 'Gemini Vision AI model returned non-OK status');
-          if (response.status === 429) {
-            logger.warn('Gemini API quota exceeded (429 Rate Limit), fast failing to AWS Rekognition Tier 2');
-            return null;
-          }
-          continue;
+          logger.warn({ modelName, status: response.status, body: errorBody.substring(0, 300) }, 'Gemini Vision AI returned non-OK status, fast failing to AWS Rekognition');
+          return null; // Fast fail immediately to AWS Rekognition Tier 2
         }
 
         const responseData = await response.json();
