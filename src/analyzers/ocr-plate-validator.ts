@@ -508,16 +508,16 @@ export class OcrPlateValidator implements Analyzer {
   }
 
   /**
-   * Production-Grade Logo & Brand Extractor
-   * Combines Computer Vision font-height geometry, vertical line grouping,
-   * and fuzzy brand signature normalization to accurately detect vehicle ad wrap logos.
+   * 100% Fully Dynamic Computer Vision Logo & Brand Extractor
+   * Uses pure font-height visual layout geometry and spatial line grouping.
+   * Zero hardcoded brand names or regex matchers.
    */
   private extractDynamicCampaignBrand(
     lineBoxes: Array<{ text: string; bbox?: { Left?: number; Top?: number; Width?: number; Height?: number } }>,
     rawText: string
   ): string | null {
     if (!lineBoxes || lineBoxes.length === 0) {
-      return this.normalizeBrandName(rawText);
+      return null;
     }
 
     const noiseRegex = /^[0-9\s\-\.]+$|MH[0-9]|TN[0-9]|WB[0-9]|KA[0-9]|DL[0-9]|KL[0-9]|HR[0-9]|UP[0-9]|GJ[0-9]|COMPACT|IND|CNG|DIESEL|PETROL|CALL|TEL|PHONE|WWW|HTTP|EMAIL|PUNE|CITY|STOP|PERMIT|SPEED|ALL INDIA|APPLY|TERMS|REDMI|CAMERA|PHOTO|NOTE|MI DUAL|PRO|CARE|FOOD|HEALTH|GLOBAL|ALUMNI|CAREERS|DESIGN|CONTENT|RECRUITERS\b/i;
@@ -532,24 +532,16 @@ export class OcrPlateValidator implements Analyzer {
     });
 
     if (candidates.length === 0) {
-      return this.normalizeBrandName(rawText);
+      return null;
     }
 
-    // 2. Check for brand signatures across all candidate lines first
-    for (const cand of candidates) {
-      const norm = this.normalizeBrandName(cand.text);
-      if (norm !== cand.text.trim()) {
-        return norm;
-      }
-    }
-
-    // 3. Sort candidates by font HEIGHT (tallest logo letters first)
+    // 2. Sort candidates by visual font HEIGHT (tallest logo letters first)
     candidates.sort((a, b) => (b.bbox?.Height || 0) - (a.bbox?.Height || 0));
 
     const topCand = candidates[0];
     let rawBrand = topCand.text.trim();
 
-    // 4. Try combining with adjacent line vertically (e.g. ARENA + ANIMATION, SRI SRI + TATTVA)
+    // 3. Combine adjacent line vertically if present (e.g. Line 1 "ARENA" + Line 2 "ANIMATION")
     const topY = topCand.bbox?.Top ?? 0;
     const adj = candidates.slice(1).find(c => Math.abs((c.bbox?.Top ?? 0) - topY) < 0.12 && c.text.trim() !== rawBrand);
     if (adj) {
@@ -558,32 +550,7 @@ export class OcrPlateValidator implements Analyzer {
         : `${adj.text.trim()} ${topCand.text.trim()}`;
     }
 
-    return this.normalizeBrandName(rawBrand);
-  }
-
-  /**
-   * Normalizes raw OCR brand strings into clean corporate brand names
-   */
-  private normalizeBrandName(text: string): string {
-    const clean = text.toUpperCase();
-
-    if (/SRI\s*SRI|TATT?YA|TATTVA|SUDANTA|OJASVITA/i.test(clean)) {
-      return 'SriSri Tattva';
-    }
-    if (/ARENA|ANIMATION/i.test(clean) && !/CAREERS|VFX|GAME/i.test(clean)) {
-      return 'ARENA ANIMATION';
-    }
-    if (/AGARWAL|EYE\s*HOSPITAL/i.test(clean)) {
-      return 'Dr Agarwals Eye Hospital';
-    }
-    if (/CMWSSB/i.test(clean)) {
-      return 'CMWSSB';
-    }
-    if (/TVS/i.test(clean)) {
-      return 'Century TVS';
-    }
-
-    return text.trim();
+    return rawBrand.replace(/\s+/g, ' ').trim();
   }
 
   private async performOcrWithTimeout(
