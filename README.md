@@ -1,28 +1,74 @@
-# VehicleIQ — Intelligent Media Processing Pipeline
+<![CDATA[<div align="center">
 
-> Production-Grade Backend & AI Engineering Take-Home Assignment Submission
+# VehicleIQ
 
-VehicleIQ is an asynchronous backend system built with **Next.js**, **TypeScript**, **BullMQ**, **Redis**, and **PostgreSQL**. It ingests vehicle images uploaded from field operators, queues them for background execution, and processes them through an integrated 6-stage image analysis pipeline featuring computer vision algorithms, perceptual hashing, OCR plate validation, and EXIF metadata inspection.
+**Intelligent Media Processing Pipeline for Outdoor Campaign Ad Verification**
+
+[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)](https://redis.io/)
+[![AWS](https://img.shields.io/badge/AWS-Rekognition-FF9900?logo=amazonaws&logoColor=white)](https://aws.amazon.com/rekognition/)
+
+> A production-grade asynchronous backend system that ingests vehicle images from field operators, processes them through a 6-stage computer vision pipeline, and extracts campaign brand names and license plates using a hybrid AI architecture.
+
+</div>
 
 ---
 
-## ⭐️ Bonus Features & Quick Verification Commands
+## Table of Contents
 
-This project fulfills **all 3 bonus evaluation criteria** specified in the assignment prompt:
+- [Quick Start](#-quick-start)
+- [System Architecture](#-system-architecture)
+- [Project Structure](#-project-structure)
+- [Key Technical Capabilities](#-key-technical-capabilities)
+- [Analysis Pipeline](#-6-stage-analysis-pipeline)
+- [AI-Powered OCR & Brand Extraction](#-ai-powered-ocr--brand-extraction)
+- [API Reference](#-api-reference)
+- [Engineering Trade-offs](#-engineering-trade-offs)
+- [AI Usage Disclosure](#-ai-usage-disclosure)
+- [Bonus Features](#-bonus-features)
 
-1. 🐳 **Docker Setup**: Full multi-container orchestrations provided for production (`docker-compose.yml`) and fast hot-reloading development (`docker-compose.dev.yml`).
-   ```bash
-   # One-command full stack launch:
-   docker-compose up --build
-   ```
-2. 🌱 **Database Seed Script**: Seeds initial vehicle image records and analyzer metric history.
-   ```bash
-   npm run db:seed
-   ```
-3. 🧪 **Automated Test Suite**: Programmatic unit & integration testing for all 6 analyzer algorithms.
-   ```bash
-   npm test
-   ```
+---
+
+## 🚀 Quick Start
+
+### Docker Compose (Recommended)
+
+```bash
+# Clone and launch the entire stack with a single command
+docker-compose up --build
+```
+
+| Service | URL |
+|:--------|:----|
+| Web Dashboard & API | `http://localhost:3000` |
+| Health Check | `http://localhost:3000/api/health` |
+| PostgreSQL | `localhost:5432` |
+| Redis | `localhost:6379` |
+
+### Local Development
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Configure environment
+cp .env.example .env
+
+# 3. Initialize database & seed data
+npm run db:push && npm run db:seed
+
+# 4. Run automated tests
+npm test
+
+# 5. Start the application (Terminal 1)
+npm run dev
+
+# 6. Start the BullMQ worker (Terminal 2)
+npm run worker
+```
 
 ---
 
@@ -31,10 +77,10 @@ This project fulfills **all 3 bonus evaluation criteria** specified in the assig
 ```mermaid
 graph TB
     subgraph "Client Layer"
-        CL["📱 Field Operator / Admin Dashboard<br/>Next.js App Router UI"]
+        CL["Field Operator / Admin Dashboard - Next.js App Router UI"]
     end
 
-    subgraph "API Layer (Next.js Server)"
+    subgraph "API Layer - Next.js Server"
         R1["POST /api/images/upload"]
         R2["GET /api/images/:id/status"]
         R3["GET /api/images/:id/results"]
@@ -42,170 +88,210 @@ graph TB
         R5["GET /api/health"]
     end
 
-    subgraph "Queue & Processing Layer"
-        Q["🔴 Redis 7 Broker<br/>BullMQ Queue"]
-        W["⚙️ BullMQ Worker Process<br/>(tsx worker.ts)"]
+    subgraph "Queue and Processing Layer"
+        Q["Redis 7 Broker - BullMQ Queue"]
+        W["BullMQ Worker Process - tsx worker.ts"]
     end
 
-    subgraph "Analysis Engine (6 Checks)"
-        A1["🔍 Blur Detection (Sharp Laplacian)"]
-        A2["☀️ Brightness Analysis (Sharp stats)"]
-        A3["👯 Duplicate Hash (64-bit dHash)"]
-        A4["🔢 OCR & Plate (Tesseract.js + Regex)"]
-        A5["📐 Dimensions (Sharp metadata)"]
-        A6["📋 Metadata & EXIF (ExifReader)"]
+    subgraph "Analysis Engine - 6 Checks"
+        A1["Blur Detection"]
+        A2["Brightness Analysis"]
+        A3["Duplicate Detection"]
+        A4["OCR and Plate Validation"]
+        A5["Dimension Validation"]
+        A6["EXIF Metadata Inspection"]
     end
 
-    subgraph "Data & Storage"
-        PG["🐘 PostgreSQL 16 (Prisma ORM)"]
-        FS["📁 Local Storage (./uploads/)"]
+    subgraph "AI Services"
+        RK["AWS Rekognition OCR"]
+        GM["Google Gemini Vision AI"]
+        BD["AWS Bedrock - Claude"]
+    end
+
+    subgraph "Data and Storage"
+        PG["PostgreSQL 16 - Prisma ORM"]
+        FS["Local Storage - ./uploads/"]
     end
 
     CL -->|HTTPS| R1 & R2 & R3 & R4 & R5
     R1 -->|1. Store Metadata| PG
     R1 -->|2. Save File| FS
-    R1 -->|3. Add Job| Q
+    R1 -->|3. Enqueue Job| Q
     Q -->|4. Dequeue Job| W
     W -->|5. Run Pipeline| A1 & A2 & A3 & A4 & A5 & A6
-    A1 & A2 & A3 & A4 & A5 & A6 -->|6. Atomic Write Results| PG
+    A4 -->|Tier 1| RK
+    A4 -->|Tier 2| GM
+    A4 -->|Tier 3| BD
+    A1 & A2 & A3 & A4 & A5 & A6 -->|6. Persist Results| PG
 ```
 
 ---
 
-## ⚡ Key Technical Capabilities & Principles
+## 📂 Project Structure
 
-1. **Next.js Single-Codebase Architecture**: Built entirely in TypeScript using Next.js App Router for Route Handlers and UI pages, while running the BullMQ worker as a decoupled Node.js process using the exact same codebase and database schemas (`tsx worker.ts`).
-2. **Resilient Asynchronous Pipeline**: Queue-based producer-consumer architecture powered by BullMQ + Redis. Jobs feature exponential backoff retries (5s → 10s → 20s), lock duration control, and stalled job recovery.
-3. **Isolated Analyzer Engine**: Every image check implements a strict `Analyzer` interface. Each check executes inside an isolated `try/catch` block — if a single analyzer fails or times out, the rest of the pipeline still completes, storing error metadata specifically for that check.
-4. **Idempotency & Deduplication**:
-   - **Upload Idempotency**: Client or auto-generated `SHA-256(file + filename)` idempotency keys prevent duplicate database inserts (`409 Conflict`).
-   - **Queue Deduplication**: Uses `imageId` as the BullMQ job ID.
-   - **Database Upsert**: Re-executing retried jobs uses Prisma `upsert` queries to prevent duplicate result rows.
-5. **Deterministic Metrics & Scores**: Numerical scores (Laplacian standard deviation, luminance mean, Hamming distance) are explicitly separated from confidence probabilities to maintain statistical accuracy and reviewer trust.
-
----
-
-## 🔬 6 Integrated Image Analyzers
-
-| # | Analyzer | Core Technique & Library | Fallback Strategy |
-|:--|:---------|:-------------------------|:------------------|
-| **1** | **Blur Detection** | Sharp 3x3 Laplacian kernel convolution (`[0,1,0,1,-4,1,0,1,0]`) computing standard deviation variance | 5x5 Expanded Laplacian matrix if 3x3 convolution encounters edge cases |
-| **2** | **Brightness Analysis** | Sharp greyscale channel mean luminance (min threshold: 40, max threshold: 220) | Direct RGB buffer luminance sampling (`0.2126R + 0.7152G + 0.0722B`) |
-| **3** | **Duplicate Detection** | 64-bit Difference Hash (dHash) generated via Sharp; Hamming distance search against PostgreSQL | Full dataset Hamming distance threshold comparison (`dist <= 10`) |
-| **4** | **OCR & Plate Validation** | Region Crop + Tesseract.js text extraction + Indian vehicle plate regex (`^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$`) | Multi-token sliding window candidate extraction + Fuzzy character substitution (e.g. `O->0`, `I->1`, `B->8`) |
-| **5** | **Dimension Validation** | Sharp resolution inspection (min 200x200, max 10000x10000) & aspect ratio bounds (`0.2` to `5.0`) | Megapixel count & ratio calculation |
-| **6** | **EXIF Metadata** | ExifReader parsing camera make, model, GPS coordinates, DateTime, and editing software tags | Graceful anomaly reporting for missing EXIF headers |
-
----
-
-## 🤖 AI Usage Disclosure (Mandatory)
-
-In compliance with the assignment instructions, AI tools were utilized strategically throughout development:
-
-1. **Where AI Was Used**:
-   - Algorithm selection for blur detection (evaluating Laplacian variance vs Sobel gradient).
-   - Designing the fuzzy character substitution matrix for Indian vehicle number plate OCR post-processing.
-   - Initial drafting of Dockerfile multi-stage builds for Alpine Node.js with native `vips` dependencies.
-2. **Where AI Output Was Wrong or Refined**:
-   - Initial AI suggestions recommended wrapping Tesseract.js inside Next.js Route Handlers. This was rejected because long-running WebAssembly tasks block HTTP execution in serverless/edge environments. The architecture was corrected to run workers in a standalone BullMQ process.
-   - AI suggested returning `confidence: 0.85` for heuristic checks. This was corrected to return deterministic `score` metrics to avoid misrepresenting metrics as calibrated ML probabilities.
-3. **Validation Methods**:
-   - Tested blur detection against known blurry and sharp sample images to calibrate the Laplacian standard deviation threshold (`10.0`).
-   - Validated OCR regex and character substitution against 10+ real-world Indian license plate format variations.
-
----
-
-## ⚖️ Engineering Trade-offs & Production Evolution
-
-| Feature | Take-Home Scope (Implemented) | Production Evolution (Documented) |
-|:---|:---|:---|
-| **File Storage** | Local filesystem (`./uploads`) | AWS S3 / Cloudflare R2 with pre-signed upload URLs to bypass API servers |
-| **Database** | PostgreSQL 16 (single instance) | PgBouncer connection pooling + PostgreSQL Read Replicas + table partitioning by month |
-| **Duplicate Indexing** | In-memory Hamming distance scan | `pgvector` with HNSW binary indexing for sub-linear similarity search |
-| **Worker Scaling** | Single worker instance with concurrency 2 | Kubernetes Horizontal Pod Autoscaler (HPA) scaling worker pods based on Redis queue length |
-
----
-
-## 🚀 Running Instructions
-
-### Option 1: Docker Compose (Recommended — One Command)
-
-Ensure Docker Desktop is running, then execute:
-
-```bash
-docker-compose up --build
+```
+gOGig/
+├── prisma/
+│   ├── schema.prisma              # Database schema (Image, AnalysisResult models)
+│   └── seed.ts                    # Database seed script
+│
+├── scripts/
+│   ├── run-tests.ts               # Automated test runner for all 6 analyzers
+│   └── test-upload.sh             # Shell script for upload testing
+│
+├── src/
+│   ├── analyzers/                 # Core analysis engine
+│   │   ├── index.ts               # Analyzer registry & exports
+│   │   ├── types.ts               # Analyzer interface definitions
+│   │   ├── blur-detector.ts       # Laplacian variance blur detection
+│   │   ├── brightness-analyzer.ts # Luminance mean brightness analysis
+│   │   ├── duplicate-detector.ts  # 64-bit dHash perceptual hashing
+│   │   ├── ocr-plate-validator.ts # Hybrid AI OCR + brand extraction
+│   │   ├── dimension-validator.ts # Resolution & aspect ratio checks
+│   │   └── metadata-analyzer.ts   # EXIF/GPS metadata inspection
+│   │
+│   ├── app/                       # Next.js App Router
+│   │   ├── layout.tsx             # Root layout with global styles
+│   │   ├── page.tsx               # Dashboard home page
+│   │   ├── globals.css            # Global stylesheet
+│   │   ├── upload/                # Upload page UI
+│   │   ├── images/                # Image gallery & detail pages
+│   │   └── api/
+│   │       ├── health/            # GET /api/health
+│   │       └── images/
+│   │           ├── route.ts       # GET /api/images (list all)
+│   │           ├── upload/        # POST /api/images/upload
+│   │           └── [id]/
+│   │               ├── route.ts   # GET /api/images/:id
+│   │               ├── status/    # GET /api/images/:id/status
+│   │               ├── results/   # GET /api/images/:id/results
+│   │               ├── file/      # GET /api/images/:id/file
+│   │               ├── annotated/ # GET /api/images/:id/annotated
+│   │               └── retry/     # POST /api/images/:id/retry
+│   │
+│   ├── components/                # React UI components
+│   │   ├── layout/                # Navigation, header, footer
+│   │   └── ui/                    # Reusable UI primitives
+│   │
+│   ├── lib/                       # Shared utilities & infrastructure
+│   │   ├── config.ts              # Environment configuration
+│   │   ├── db.ts                  # Prisma client singleton
+│   │   ├── redis.ts               # Redis connection
+│   │   ├── queue.ts               # BullMQ queue setup
+│   │   ├── logger.ts              # Pino structured logger
+│   │   ├── errors.ts              # Custom error classes
+│   │   └── utils.ts               # Helper utilities
+│   │
+│   ├── services/                  # Business logic services
+│   │   ├── image-service.ts       # Image CRUD & processing orchestration
+│   │   ├── storage-service.ts     # File storage abstraction
+│   │   └── cv-annotation-service.ts # Computer vision overlay renderer
+│   │
+│   └── workers/                   # Background job processors
+│
+├── uploads/                       # Local file storage directory
+├── worker.ts                      # BullMQ worker entry point
+├── docker-compose.yml             # Production Docker orchestration
+├── docker-compose.dev.yml         # Development Docker orchestration
+├── Dockerfile                     # Multi-stage production Docker build
+├── Dockerfile.dev                 # Development Docker build
+├── package.json                   # Dependencies & npm scripts
+└── tsconfig.json                  # TypeScript configuration
 ```
 
-Access services at:
-- **Web Dashboard & API**: `http://localhost:3000`
-- **Health Check**: `http://localhost:3000/api/health`
-- **PostgreSQL**: `localhost:5432`
-- **Redis**: `localhost:6379`
+---
 
-### Option 2: Local Development Setup
+## ⚡ Key Technical Capabilities
 
-Prerequisites: Node.js v20+, PostgreSQL, Redis running locally.
+| Capability | Implementation |
+|:-----------|:---------------|
+| **Single-Codebase Architecture** | Next.js App Router for API + UI, BullMQ worker runs from the same TypeScript codebase via `tsx worker.ts` |
+| **Resilient Async Pipeline** | BullMQ + Redis queue with exponential backoff retries (5s → 10s → 20s), lock duration control, and stalled job recovery |
+| **Isolated Analyzer Engine** | Each analyzer implements a strict `Analyzer` interface with isolated error handling — one failure never breaks the pipeline |
+| **Upload Idempotency** | SHA-256 based idempotency keys prevent duplicate uploads (`409 Conflict`) |
+| **Queue Deduplication** | `imageId` as BullMQ job ID prevents duplicate processing |
+| **Database Upsert Safety** | Prisma `upsert` queries ensure retried jobs never create duplicate result rows |
+| **Deterministic Scoring** | Numerical metrics (Laplacian σ, luminance μ, Hamming distance) are separated from confidence probabilities |
 
-1. **Install Dependencies**:
-   ```bash
-   npm install
-   ```
+---
 
-2. **Setup Environment**:
-   ```bash
-   cp .env.example .env
-   ```
+## 🔬 6-Stage Analysis Pipeline
 
-3. **Initialize Database & Run Seed**:
-   ```bash
-   npm run db:push
-   npm run db:seed
-   ```
+| Stage | Analyzer | Technique | Fallback |
+|:------|:---------|:----------|:---------|
+| 1 | **Blur Detection** | Sharp 3×3 Laplacian kernel convolution computing standard deviation variance | 5×5 expanded Laplacian matrix |
+| 2 | **Brightness Analysis** | Greyscale channel mean luminance (thresholds: 40–220) | RGB buffer luminance sampling (`0.2126R + 0.7152G + 0.0722B`) |
+| 3 | **Duplicate Detection** | 64-bit dHash via Sharp; Hamming distance search against PostgreSQL | Full dataset threshold comparison (`distance ≤ 10`) |
+| 4 | **OCR & Plate Validation** | AWS Rekognition + Gemini Vision AI + Tesseract.js with Indian plate regex | Multi-token sliding window + fuzzy character substitution (`O→0`, `I→1`, `B→8`) |
+| 5 | **Dimension Validation** | Sharp resolution inspection (200×200 – 10000×10000) & aspect ratio bounds | Megapixel count & ratio calculation |
+| 6 | **EXIF Metadata** | ExifReader parsing camera make, model, GPS, DateTime, editing software | Graceful anomaly reporting for missing EXIF |
 
-4. **Execute Automated Unit Tests**:
-   ```bash
-   npm test
-   ```
+---
 
-5. **Start Development Application (Terminal 1)**:
-   ```bash
-   npm run dev
-   ```
+## 🧠 AI-Powered OCR & Brand Extraction
 
-6. **Start BullMQ Worker (Terminal 2)**:
-   ```bash
-   npm run worker
-   ```
+The OCR & Plate Validation analyzer uses a **3-tier hybrid AI architecture** for maximum accuracy:
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Tier 1: AWS Rekognition (Primary)                  │
+│  • DetectText API for all visible text extraction    │
+│  • Bounding box coordinates for plate localization   │
+│  • Raw OCR text preserved for downstream AI          │
+├─────────────────────────────────────────────────────┤
+│  Tier 2: Google Gemini Vision AI                    │
+│  • gemini-2.5-flash → gemini-1.5-flash-001 fallback│
+│  • Image + OCR text → brand name normalization      │
+│  • Semantic understanding of ad copy vs brand logos  │
+├─────────────────────────────────────────────────────┤
+│  Tier 3: AWS Bedrock (Claude) + CV Geometry         │
+│  • Claude Vision for multimodal brand extraction    │
+│  • Font-height geometry ranking as final fallback   │
+│  • Tallest-font text line = likely brand/logo       │
+└─────────────────────────────────────────────────────┘
+```
+
+**License Plate Detection** supports:
+- Single-line plates (e.g., `TN05BT5754`)
+- Two-line auto-rickshaw plates (e.g., `MH12N` + `W8556`)
+- Yellow, white, and green plate backgrounds
+- Fuzzy character correction for OCR misreads
 
 ---
 
 ## 📡 API Reference
 
-### 1. Upload Vehicle Image
-`POST /api/images/upload`  
-Content-Type: `multipart/form-data`
+### Upload Vehicle Image
+
+```http
+POST /api/images/upload
+Content-Type: multipart/form-data
+```
 
 ```json
-// Response: 202 Accepted (or 409 Conflict if duplicate idempotency key)
+// 202 Accepted
 {
   "id": "c7b3a9e1-2f4d-4b8a-9e1c-3d5f7a9b1c3d",
   "status": "PENDING",
   "message": "Image uploaded successfully. Processing queued.",
   "isDuplicateUpload": false,
   "links": {
-    "status": "/api/images/c7b3a9e1-2f4d-4b8a-9e1c-3d5f7a9b1c3d/status",
-    "results": "/api/images/c7b3a9e1-2f4d-4b8a-9e1c-3d5f7a9b1c3d/results"
+    "status": "/api/images/c7b3a9e1-.../status",
+    "results": "/api/images/c7b3a9e1-.../results"
   }
 }
 ```
 
-### 2. Fetch Processing Status
-`GET /api/images/:id/status`
+### Fetch Processing Status
+
+```http
+GET /api/images/:id/status
+```
 
 ```json
-// Response: 200 OK
+// 200 OK
 {
-  "id": "c7b3a9e1-2f4d-4b8a-9e1c-3d5f7a9b1c3d",
+  "id": "c7b3a9e1-...",
   "status": "COMPLETED",
   "failureReason": null,
   "createdAt": "2026-08-12T14:30:00.000Z",
@@ -214,20 +300,22 @@ Content-Type: `multipart/form-data`
 }
 ```
 
-### 3. Fetch Full Analysis Results
-`GET /api/images/:id/results`
+### Fetch Analysis Results
+
+```http
+GET /api/images/:id/results
+```
 
 ```json
-// Response: 200 OK
+// 200 OK
 {
-  "id": "c7b3a9e1-2f4d-4b8a-9e1c-3d5f7a9b1c3d",
+  "id": "c7b3a9e1-...",
   "originalName": "vehicle_MH12AB1234.jpg",
   "status": "COMPLETED",
   "summary": {
     "totalChecks": 6,
     "passed": 5,
     "failed": 1,
-    "errored": 0,
     "overallQualityScore": 0.83
   },
   "analysisResults": [
@@ -242,18 +330,25 @@ Content-Type: `multipart/form-data`
       "checkName": "ocr_plate_validation",
       "passed": true,
       "score": 1.0,
-      "details": { "rawText": "MH 12 AB 1234", "normalizedPlate": "MH12AB1234", "formatValid": true },
+      "details": {
+        "rawText": "MH 12 AB 1234",
+        "normalizedPlate": "MH12AB1234",
+        "campaignBrand": "ARENA ANIMATION"
+      },
       "durationMs": 2340
     }
   ]
 }
 ```
 
-### 4. Health Check
-`GET /api/health`
+### Health Check
+
+```http
+GET /api/health
+```
 
 ```json
-// Response: 200 OK
+// 200 OK
 {
   "status": "healthy",
   "uptime": 3600,
@@ -265,3 +360,55 @@ Content-Type: `multipart/form-data`
   }
 }
 ```
+
+---
+
+## ⚖️ Engineering Trade-offs
+
+| Feature | Current Implementation | Production Evolution |
+|:--------|:----------------------|:---------------------|
+| **File Storage** | Local filesystem (`./uploads`) | AWS S3 / Cloudflare R2 with pre-signed upload URLs |
+| **Database** | PostgreSQL 16 (single instance) | PgBouncer + read replicas + monthly table partitioning |
+| **Duplicate Index** | In-memory Hamming distance scan | `pgvector` HNSW binary indexing for sub-linear search |
+| **Worker Scaling** | Single worker, concurrency 2 | Kubernetes HPA scaling based on Redis queue depth |
+| **AI Rate Limits** | Gemini free tier with model fallback chain | Dedicated API quotas with request queuing |
+
+---
+
+## 🤖 AI Usage Disclosure
+
+In compliance with the assignment instructions, AI tools were utilized strategically:
+
+**Where AI Was Used:**
+- Algorithm selection for blur detection (Laplacian variance vs. Sobel gradient evaluation)
+- Designing the fuzzy character substitution matrix for Indian license plate OCR
+- Initial drafting of multi-stage Dockerfile builds for Alpine Node.js with native `vips` dependencies
+
+**Where AI Output Was Corrected:**
+- AI suggested running Tesseract.js inside Next.js Route Handlers — rejected because long-running WebAssembly tasks block HTTP execution in serverless environments. Corrected to run in a standalone BullMQ worker process.
+- AI suggested returning `confidence: 0.85` for heuristic checks — corrected to return deterministic `score` metrics to avoid misrepresenting heuristics as calibrated ML probabilities.
+
+**Validation Methods:**
+- Blur detection calibrated against known blurry/sharp sample images (Laplacian σ threshold: `10.0`)
+- OCR regex and fuzzy substitution validated against 10+ real-world Indian license plate formats
+
+---
+
+## ⭐ Bonus Features
+
+This project fulfills **all 3 bonus evaluation criteria**:
+
+| Bonus | Implementation |
+|:------|:---------------|
+| 🐳 **Docker Setup** | Production (`docker-compose.yml`) and dev (`docker-compose.dev.yml`) multi-container orchestration |
+| 🌱 **Database Seed** | `npm run db:seed` — populates initial vehicle records and analyzer history |
+| 🧪 **Test Suite** | `npm test` — automated unit & integration tests for all 6 analyzers |
+
+---
+
+<div align="center">
+
+Built with TypeScript · Next.js · BullMQ · PostgreSQL · Redis · AWS Rekognition · Google Gemini
+
+</div>
+]]>
