@@ -60,6 +60,32 @@ export async function processImageJob(job: Job<{ imageId: string }>) {
           durationMs,
         });
 
+        // Immediately persist completed check to DB so real-time status API streams live check progress
+        await prisma.analysisResult.upsert({
+          where: {
+            imageId_checkName: {
+              imageId,
+              checkName: result.checkName,
+            },
+          },
+          create: {
+            imageId,
+            checkName: result.checkName,
+            passed: result.passed,
+            score: result.score,
+            details: result.details as any,
+            error: null,
+            durationMs,
+          },
+          update: {
+            passed: result.passed,
+            score: result.score,
+            details: result.details as any,
+            error: null,
+            durationMs,
+          },
+        }).catch((e) => logger.warn({ imageId, checkName: result.checkName, error: e }, 'Failed early upsert of check result'));
+
         logger.info(
           { correlationId, imageId, analyzer: analyzer.name, passed: result.passed, score: result.score, durationMs },
           'Analyzer completed'
@@ -70,14 +96,22 @@ export async function processImageJob(job: Job<{ imageId: string }>) {
 
         logger.error({ correlationId, imageId, analyzer: analyzer.name, error: errorMessage }, 'Analyzer execution error');
 
-        results.push({
+        const failedResult = {
           checkName: analyzer.name,
           passed: false,
           score: null,
           details: { error: errorMessage },
           error: errorMessage,
           durationMs,
-        });
+        };
+
+        results.push(failedResult);
+
+        await prisma.analysisResult.upsert({
+          where: { imageId_checkName: { imageId, checkName: analyzer.name } },
+          create: { imageId, checkName: analyzer.name, passed: false, score: null, details: { error: errorMessage } as any, error: errorMessage, durationMs },
+          update: { passed: false, score: null, details: { error: errorMessage } as any, error: errorMessage, durationMs },
+        }).catch(() => {});
       }
     }
 

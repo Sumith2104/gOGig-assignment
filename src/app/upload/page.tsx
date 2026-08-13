@@ -295,58 +295,44 @@ export default function UploadPage() {
             </div>
           </div>
 
-          {/* Sleek Slide-Up Animated Stage Ticker Feed (No cheap loader bar) */}
+          {/* Simple Realtime Data Loader (Strictly Real Backend DB Data) */}
           {processingStatus?.status !== 'COMPLETED' && processingStatus?.status !== 'FAILED' && (
-            <div className="p-4 rounded-xl bg-slate-900 text-white border border-slate-800 shadow-md space-y-3 relative overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-2">
-                  <Activity className="w-3.5 h-3.5 text-orange-500 animate-pulse" /> Live Pipeline Execution Stream
-                </span>
-                <span className="text-xs font-mono font-bold text-emerald-400">
-                  Elapsed: {elapsedSeconds}s
-                </span>
-              </div>
-
-              {/* Animated Slide-Up Ticker Card Item */}
+            <div className="p-4 rounded-xl bg-slate-900 text-white border border-slate-800 shadow-md space-y-3">
               {(() => {
-                const passedCount = processingStatus?.analysisResults?.length || 0;
-                let currentStageText = 'File Ingestion & Metadata Inspection';
-                let estTimeText = '~7s remaining';
-
-                if (passedCount >= 5) {
-                  currentStageText = 'Compositing Computer Vision Feature Map Overlay';
-                  estTimeText = '~1s remaining';
-                } else if (passedCount >= 4) {
-                  currentStageText = 'Invoking Gemini Vision AI & License Plate OCR';
-                  estTimeText = '~2s remaining';
-                } else if (passedCount >= 3) {
-                  currentStageText = '64-bit Perceptual Hash Duplicate Scanning';
-                  estTimeText = '~4s remaining';
-                } else if (passedCount >= 2) {
-                  currentStageText = 'Pixel Brightness & Exposure Sampling';
-                  estTimeText = '~5s remaining';
-                } else if (passedCount >= 1) {
-                  currentStageText = 'Blur & Laplacian Edge Contrast Analysis';
-                  estTimeText = '~6s remaining';
-                }
+                const results = processingStatus?.analysisResults || [];
+                const completedCount = results.length;
+                const totalChecks = 6;
+                const progressPct = Math.round((completedCount / totalChecks) * 100);
+                const latestCheck = results[results.length - 1];
 
                 return (
-                  <div className="h-11 relative overflow-hidden flex items-center">
-                    <div
-                      key={passedCount}
-                      className="w-full flex items-center justify-between bg-slate-950/80 px-4 py-2.5 border-l-4 border-l-amber-500 border border-slate-800 shadow-sm transition-all duration-300 animate-in slide-in-from-bottom-5 fade-in"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
-                        <span className="text-xs font-bold text-slate-100 tracking-wide">
-                          {currentStageText}...
-                        </span>
-                      </div>
-                      <span className="text-[11px] font-mono font-bold text-orange-400 bg-slate-900 px-2.5 py-1 border border-slate-800">
-                        {estTimeText}
+                  <>
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                        <Activity className="w-3.5 h-3.5 text-orange-500 animate-pulse" /> Realtime Pipeline Ingestion
+                      </span>
+                      <span className="text-xs font-mono font-bold text-amber-400">
+                        {completedCount} / {totalChecks} Checks Saved ({progressPct}%)
                       </span>
                     </div>
-                  </div>
+
+                    {/* Simple Linear Progress Fill Bar */}
+                    <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+                      <div
+                        className="bg-orange-500 h-full transition-all duration-300 shadow-sm"
+                        style={{ width: `${progressPct}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs font-mono text-slate-300 pt-1">
+                      <span className="text-slate-400 truncate max-w-[320px]">
+                        {latestCheck
+                          ? `Latest: ${latestCheck.checkName.replace(/_/g, ' ')} (${latestCheck.durationMs ? `${latestCheck.durationMs}ms` : 'Saved'})`
+                          : 'Worker executing checks in PostgreSQL...'}
+                      </span>
+                      <span className="text-emerald-400 font-bold shrink-0">Live API Data Stream</span>
+                    </div>
+                  </>
                 );
               })()}
             </div>
