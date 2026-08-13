@@ -16,6 +16,7 @@
 ## Table of Contents
 
 - [Quick Start](#-quick-start)
+- [Services & Technology Stack](#-services--technology-stack)
 - [System Architecture](#-system-architecture)
 - [Project Structure](#-project-structure)
 - [Key Technical Capabilities](#-key-technical-capabilities)
@@ -66,6 +67,27 @@ npm run dev
 # 6. Start the BullMQ worker (Terminal 2)
 npm run worker
 ```
+
+---
+
+## 🛠️ Services & Technology Stack
+
+The pipeline is engineered with production-grade cloud, AI, and asynchronous technologies:
+
+| Category | Service / Technology | Role in System | Key Capabilities & Libraries |
+|:---|:---|:---|:---|
+| **Frontend & API** | **Next.js 14 (App Router)** | Full-stack web dashboard & REST API endpoints | Server Components, Route Handlers, Tailwind CSS, Lucide Icons |
+| **Language Runtime** | **TypeScript 5.0 / Node.js 20** | Strict static type safety & unified codebase | Shared interfaces across API, analyzers, and worker processes |
+| **Queue & Messaging** | **BullMQ + Redis 7** | Distributed message broker & asynchronous jobs | Exponential backoff retries, concurrency controls, stalled job recovery |
+| **Database & ORM** | **PostgreSQL 16 + Prisma ORM 5** | Persistent relational ACID storage & queries | Atomic writes, upsert safety, connection pooling |
+| **Cloud Infrastructure** | **AWS EC2 (Ubuntu Linux)** | Production host & automated Docker deployment | Live deployment, SSL (`sslip.io`), systemd container supervisor |
+| **AI Vision (Primary)** | **AWS Rekognition** | Optical Character Recognition & Bounding Boxes | `DetectText` API, localized sub-region plate coordinate geometry |
+| **AI Semantic Vision** | **Google Gemini Vision AI** | Brand extraction, normalization & reasoning | `gemini-2.5-flash` & `gemini-1.5-flash-001` with multimodal image prompts |
+| **AI LLM Fallback** | **AWS Bedrock (Claude Vision)** | Multimodal advertisement verification fallback | Anthropic Claude 3.5 Sonnet / Haiku vision models |
+| **Computer Vision Engine**| **Sharp (libvips C++ native)** | High-speed image transformation & analysis | 3×3 Laplacian convolution, luminance stats, 64-bit dHash, cropping |
+| **Metadata Extraction** | **ExifReader** | Deep EXIF, GPS & Camera inspection | GPS latitude/longitude parsing, camera make/model detection |
+| **Offline OCR Engine** | **Tesseract.js (WebAssembly)** | Standalone offline OCR plate recognition fallback | Adaptive contrast stretching, Indian license plate regex matcher |
+| **Containerization** | **Docker & Docker Compose** | Multi-container reproducible environments | Alpine Linux multi-stage builds, hot-reloading dev compose |
 
 ---
 
