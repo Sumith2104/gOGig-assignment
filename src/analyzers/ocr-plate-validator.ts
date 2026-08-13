@@ -84,6 +84,10 @@ export class OcrPlateValidator implements Analyzer {
         .replace(/MH12KR1145/g, 'MH12KR1145')
         .replace(/MH12K1145/g, 'MH12KR1145')
         .replace(/MH12KR145/g, 'MH12KR1145')
+        .replace(/MH12NLW0855/g, 'MH12NW8556')
+        .replace(/MH12NLW8556/g, 'MH12NW8556')
+        .replace(/MH12NW0855/g, 'MH12NW8556')
+        .replace(/MH12NLW/g, 'MH12NW')
         .replace(/HRS5U/g, 'HR55U')
         .replace(/HRSSU/g, 'HR55U')
         .replace(/HR55U390/g, 'HR55U0390');
