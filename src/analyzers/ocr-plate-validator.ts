@@ -19,9 +19,9 @@ export class OcrPlateValidator implements Analyzer {
     const candidates: string[] = [];
     const textWithoutExt = rawText.replace(/\.(png|jpg|jpeg|webp)$/i, '');
 
-    // Ignore watermarks, header noise, banner text
+    // Ignore watermarks, header noise, banner text, vehicle badge noise (IND, CNG, etc.)
     const filteredText = textWithoutExt.replace(
-      /TUESDAY|MONDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY|JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|CMWSSB|PERAMBUR|CHENNAI|DIVISION|LAT|LONG|TASK|AM|PM|AGARWALS|HOSPITAL|DOCTOR|PUNE|ROAD|CITY|ARENA|ANIMATION|ILVURL|REVINT|IECRUITERS|WSRE|QRSE|HNL|RECRUITERS|CREATIVE|CAREERS|GLOBAL|ALUMNI|EXPLORE|DESIGN|DIGITAL|CONTENT|FREE|ENTRY|UK|APPOINTMENT|CALL/gi,
+      /TUESDAY|MONDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY|JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|CMWSSB|PERAMBUR|CHENNAI|DIVISION|LAT|LONG|TASK|AM|PM|AGARWALS|HOSPITAL|DOCTOR|PUNE|ROAD|CITY|ARENA|ANIMATION|ILVURL|REVINT|IECRUITERS|WSRE|QRSE|HNL|RECRUITERS|CREATIVE|CAREERS|GLOBAL|ALUMNI|EXPLORE|DESIGN|DIGITAL|CONTENT|FREE|ENTRY|UK|APPOINTMENT|CALL|IND|CNG|INDIA|GOVT|COMMERCIAL/gi,
       ' '
     );
 
@@ -320,27 +320,52 @@ export class OcrPlateValidator implements Analyzer {
         return null;
       }
 
-      // Collect all detected LINE-level text
-      const allLines: string[] = [];
-      let bestPlate: string | null = null;
-      let bestBbox: { left: number; top: number; width: number; height: number } | undefined;
-      let bestConfidence = 0;
+      // Separate LINE and WORD level detections
+      const lineDetections: string[] = [];
+      const wordDetections: string[] = [];
+      const lineBoxes: { text: string; bbox?: any; confidence: number }[] = [];
 
       for (const detection of response.TextDetections) {
         if (!detection.DetectedText) continue;
 
-        const text = detection.DetectedText.toUpperCase().replace(/[^A-Z0-9\s]/g, '');
-        allLines.push(text);
+        if (detection.Type === 'LINE') {
+          lineDetections.push(detection.DetectedText);
+          lineBoxes.push({
+            text: detection.DetectedText,
+            bbox: detection.Geometry?.BoundingBox,
+            confidence: detection.Confidence || 85,
+          });
+        } else if (detection.Type === 'WORD') {
+          wordDetections.push(detection.DetectedText);
+        }
+      }
 
-        // Check if this text chunk contains a valid Indian plate
-        const check = this.normalizeAndFuzzyFixPlate(text);
-        if (check.isMatch && detection.Confidence && detection.Confidence > bestConfidence) {
+      const fullText = `${lineDetections.join('\n')}\n---\n${wordDetections.join(' ')}`;
+      const candidates = Array.from(new Set([
+        ...this.extractCandidates(lineDetections.join('\n')),
+        ...this.extractCandidates(wordDetections.join(' ')),
+        ...this.extractCandidates(fullText),
+      ]));
+
+      let bestPlate: string | null = null;
+      let bestBbox: { left: number; top: number; width: number; height: number } | undefined;
+      let bestConfidence = 0;
+
+      for (const cand of candidates) {
+        const check = this.normalizeAndFuzzyFixPlate(cand);
+        if (check.isMatch) {
           bestPlate = check.normalized;
-          bestConfidence = detection.Confidence;
+          bestConfidence = 95;
 
-          // Use Rekognition's accurate bounding box
-          if (detection.Geometry?.BoundingBox) {
-            const bb = detection.Geometry.BoundingBox;
+          // Find bounding box for the line containing state prefix (e.g., "MH", "TN", "DL")
+          const statePrefix = bestPlate.substring(0, 2);
+          const matchingLine = lineBoxes.find(l =>
+            l.text.toUpperCase().includes(statePrefix) ||
+            l.text.toUpperCase().includes(bestPlate.substring(0, 4))
+          );
+
+          if (matchingLine?.bbox) {
+            const bb = matchingLine.bbox;
             bestBbox = {
               left: Math.floor((bb.Left || 0) * width),
               top: Math.floor((bb.Top || 0) * height),
@@ -348,33 +373,23 @@ export class OcrPlateValidator implements Analyzer {
               height: Math.floor((bb.Height || 0.05) * height),
             };
           }
-        }
-      }
-
-      // If no single detection matched, try combining adjacent text fragments
-      if (!bestPlate) {
-        const combinedText = allLines.join(' ');
-        const combinedCheck = this.normalizeAndFuzzyFixPlate(combinedText);
-        if (combinedCheck.isMatch) {
-          bestPlate = combinedCheck.normalized;
-          bestConfidence = 85;
+          break;
         }
       }
 
       if (!bestPlate) {
-        logger.info({ detectedTexts: allLines.slice(0, 10) }, 'AWS Rekognition found text but no valid Indian plate pattern');
+        logger.info({ sampleText: fullText.substring(0, 200) }, 'AWS Rekognition found text but no valid Indian plate pattern');
         return null;
       }
 
       // Extract campaign brand from all detected text
-      const fullText = allLines.join(' ');
       const campaignBrand = this.extractCampaignBrand(fullText, '');
 
-      logger.info({ plate: bestPlate, confidence: bestConfidence, campaignBrand }, 'AWS Rekognition successfully detected license plate');
+      logger.info({ plate: bestPlate, confidence: bestConfidence, campaignBrand, boundingBox: bestBbox }, 'AWS Rekognition successfully detected license plate');
 
       return {
         plateNumber: bestPlate,
-        rawText: allLines.join('\n'),
+        rawText: fullText,
         boundingBox: bestBbox,
         confidence: bestConfidence / 100,
         campaignBrand,
