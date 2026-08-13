@@ -570,85 +570,90 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
         onCancel={() => setIsDeleteModalOpen(false)}
       />
 
-      {/* Fullscreen Enterprise Inspection Popup Modal */}
+      {/* Clean Centered Image Inspection Popup Dialog (No Background Blur, Sized to Content) */}
       {isLightboxOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-2xl flex flex-col justify-between p-4 md:p-8 animate-in fade-in duration-200">
-          {/* Modal Header Bar */}
-          <div className="flex items-center justify-between text-white border-b border-slate-800 pb-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-slate-900 border border-slate-800 flex items-center justify-center">
-                <Target className="w-5 h-5 text-orange-500" />
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/80 flex items-center justify-center p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-150"
+          onClick={() => setIsLightboxOpen(false)}
+        >
+          <div
+            className="bg-slate-900 border border-slate-700 text-white shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Dialog Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950/60">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-slate-800 border border-slate-700 flex items-center justify-center">
+                  <Target className="w-4 h-4 text-orange-500" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-black text-white truncate max-w-[240px] sm:max-w-[380px]">
+                    {data.originalName}
+                  </h2>
+                  <p className="text-[10px] text-slate-400 font-mono">
+                    ID: {data.id.substring(0, 12)}... • Format: {data.mimeType.split('/')[1].toUpperCase()} • {formatBytes(data.fileSize)}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-base font-black text-white uppercase tracking-wide">
-                  {data.originalName}
-                </h2>
-                <p className="text-[11px] text-slate-400 font-mono">
-                  Record ID: {data.id} • Format: {data.mimeType.split('/')[1].toUpperCase()} • Size: {formatBytes(data.fileSize)}
-                </p>
-              </div>
-            </div>
 
-            <div className="flex items-center space-x-4">
-              {/* Split View Mode Toggle */}
-              <div className="flex items-center space-x-1 bg-slate-900 p-1 border border-slate-800 text-xs font-bold">
+              <div className="flex items-center space-x-3">
+                {/* View Mode Toggle */}
+                <div className="flex items-center space-x-1 bg-slate-950 p-1 border border-slate-800 text-[11px] font-bold">
+                  <button
+                    onClick={() => setViewMode('original')}
+                    className={`px-2.5 py-1 transition-all flex items-center gap-1 ${
+                      viewMode === 'original' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Camera className="w-3 h-3" />
+                    <span>Original</span>
+                  </button>
+                  <button
+                    onClick={() => setViewMode('cv_annotated')}
+                    className={`px-2.5 py-1 transition-all flex items-center gap-1 ${
+                      viewMode === 'cv_annotated' ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Layers className="w-3 h-3" />
+                    <span>CV Map</span>
+                  </button>
+                </div>
+
                 <button
-                  onClick={() => setViewMode('original')}
-                  className={`px-3 py-1.5 transition-all flex items-center gap-1.5 ${
-                    viewMode === 'original' ? 'bg-white text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
-                  }`}
+                  onClick={() => setIsLightboxOpen(false)}
+                  className="w-8 h-8 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center border border-slate-700 transition-colors"
                 >
-                  <Camera className="w-3.5 h-3.5" />
-                  <span>Original Photo</span>
-                </button>
-                <button
-                  onClick={() => setViewMode('cv_annotated')}
-                  className={`px-3 py-1.5 transition-all flex items-center gap-1.5 ${
-                    viewMode === 'cv_annotated' ? 'bg-orange-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>CV Feature Map</span>
+                  <X className="w-4 h-4" />
                 </button>
               </div>
-
-              <button
-                onClick={() => setIsLightboxOpen(false)}
-                className="w-10 h-10 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center transition-colors border border-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
             </div>
-          </div>
 
-          {/* Centered Image Viewport */}
-          <div className="flex-1 my-6 flex items-center justify-center relative overflow-hidden bg-slate-950/80 border border-slate-800 p-2 shadow-2xl">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={viewMode === 'cv_annotated' ? `/api/images/${data.id}/annotated` : `/api/images/${data.id}/file`}
-              alt={data.originalName}
-              className="max-w-full max-h-[78vh] object-contain shadow-2xl"
-            />
-          </div>
-
-          {/* Modal Footer Info Bar */}
-          <div className="flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 border-t border-slate-800 pt-3 gap-2">
-            <div className="flex items-center space-x-4">
-              <span>Press <kbd className="px-2 py-0.5 bg-slate-900 border border-slate-800 text-[10px] text-slate-200 font-mono">ESC</kbd> to exit viewer</span>
-              {ocrResult?.details?.formatValid && ocrResult?.details?.normalizedPlate && (
-                <span className="text-emerald-400 font-mono font-bold bg-emerald-950/90 px-3 py-1 border border-emerald-800">
-                  License Plate: {ocrResult.details.normalizedPlate}
-                </span>
-              )}
-              {blurResult?.details?.laplacianStdev && (
-                <span className="text-slate-300 font-mono bg-slate-900 px-3 py-1 border border-slate-800">
-                  Laplacian: {Number(blurResult.details.laplacianStdev).toFixed(2)} stdev
-                </span>
-              )}
+            {/* Image Viewport Canvas Sized according to content */}
+            <div className="p-4 bg-slate-950 flex items-center justify-center flex-1 min-h-[300px] max-h-[68vh] overflow-hidden relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={viewMode === 'cv_annotated' ? `/api/images/${data.id}/annotated` : `/api/images/${data.id}/file`}
+                alt={data.originalName}
+                className="max-w-full max-h-[65vh] w-auto h-auto object-contain shadow-lg"
+              />
             </div>
-            <span className="text-orange-500 font-black font-mono uppercase tracking-wider">
-              VehicleIQ Media Engine
-            </span>
+
+            {/* Dialog Footer Bar */}
+            <div className="p-3 bg-slate-950/90 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-300 gap-2">
+              <div className="flex items-center space-x-3">
+                {ocrResult?.details?.normalizedPlate && (
+                  <span className="text-emerald-400 font-mono font-bold text-[11px] bg-emerald-950/80 px-2.5 py-1 border border-emerald-800">
+                    🚘 {ocrResult.details.normalizedPlate}
+                  </span>
+                )}
+                {ocrResult?.details?.campaignBrand && (
+                  <span className="text-amber-400 font-bold text-[11px] bg-slate-900 px-2.5 py-1 border border-slate-700 truncate max-w-[220px]">
+                    📢 {ocrResult.details.campaignBrand}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] text-slate-400 font-mono">Press ESC or click outside to close dialog</span>
+            </div>
           </div>
         </div>
       )}
