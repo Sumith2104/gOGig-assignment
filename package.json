@@ -16,7 +16,10 @@
     "test:upload": "bash scripts/test-upload.sh"
   },
   "dependencies": {
+    "@aws-sdk/client-ec2": "^3.1109.0",
+    "@aws-sdk/client-ec2-instance-connect": "^3.1109.0",
     "@aws-sdk/client-rekognition": "^3.1109.0",
+    "@aws-sdk/client-ssm": "^3.1109.0",
     "@prisma/client": "^5.22.0",
     "bullmq": "^5.34.0",
     "clsx": "^2.1.1",

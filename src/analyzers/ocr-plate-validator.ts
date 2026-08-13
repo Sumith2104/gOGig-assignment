@@ -472,25 +472,7 @@ export class OcrPlateValidator implements Analyzer {
       const width = metadata.width || 800;
       const height = metadata.height || 800;
 
-      // Tier 1: Gemini Vision AI
-      const geminiResult = await this.performGeminiVisionOCR(buffer, width, height);
-      if (geminiResult && geminiResult.plateNumber) {
-        const bbox = geminiResult.boundingBox || {
-          left: Math.floor(width * 0.40),
-          top: Math.floor(height * 0.62),
-          width: Math.floor(width * 0.50),
-          height: Math.floor(height * 0.25),
-        };
-        return {
-          text: geminiResult.rawText || geminiResult.plateNumber,
-          boundingBox: bbox,
-          sourceAI: true,
-          confidence: geminiResult.confidence,
-          campaignBrand: geminiResult.campaignBrand || null,
-        };
-      }
-
-      // Tier 2: AWS Rekognition DetectText
+      // Tier 1: AWS Rekognition DetectText (Primary: Fast ~1s, 100% SLA, Bounding Box Precise)
       const rekognitionResult = await this.performAwsRekognitionOCR(buffer, width, height);
       if (rekognitionResult && rekognitionResult.plateNumber) {
         const bbox = rekognitionResult.boundingBox || {
@@ -505,6 +487,24 @@ export class OcrPlateValidator implements Analyzer {
           sourceAI: true,
           confidence: rekognitionResult.confidence,
           campaignBrand: rekognitionResult.campaignBrand || null,
+        };
+      }
+
+      // Tier 2: Gemini Vision AI (Fallback)
+      const geminiResult = await this.performGeminiVisionOCR(buffer, width, height);
+      if (geminiResult && geminiResult.plateNumber) {
+        const bbox = geminiResult.boundingBox || {
+          left: Math.floor(width * 0.40),
+          top: Math.floor(height * 0.62),
+          width: Math.floor(width * 0.50),
+          height: Math.floor(height * 0.25),
+        };
+        return {
+          text: geminiResult.rawText || geminiResult.plateNumber,
+          boundingBox: bbox,
+          sourceAI: true,
+          confidence: geminiResult.confidence,
+          campaignBrand: geminiResult.campaignBrand || null,
         };
       }
 
