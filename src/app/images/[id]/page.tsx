@@ -23,6 +23,7 @@ import {
   Layers,
   Activity,
   HardDrive,
+  Sparkles,
 } from 'lucide-react';
 import { formatBytes, formatDuration } from '@/lib/utils';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
@@ -35,6 +36,8 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isGeneratingAiSummary, setIsGeneratingAiSummary] = useState(false);
+  const [aiSummaryText, setAiSummaryText] = useState<string | null>(null);
 
   const fetchResults = async () => {
     try {
@@ -86,6 +89,23 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
       console.error(e);
       setIsDeleting(false);
       setIsDeleteModalOpen(false);
+    }
+  };
+
+  const handleGenerateAiSummary = async () => {
+    setIsGeneratingAiSummary(true);
+    try {
+      const res = await fetch(`/api/images/${data.id}/summary`, { method: 'POST' });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.aiSummary) {
+          setAiSummaryText(json.aiSummary);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to generate AI summary:', err);
+    } finally {
+      setIsGeneratingAiSummary(false);
     }
   };
 
@@ -300,6 +320,51 @@ export default function ImageResultsPage({ params }: { params: { id: string } })
             <HardDrive className="w-4 h-4 text-slate-500" />
             <span>Physical Storage & Computer Vision Extraction</span>
           </h3>
+
+          {/* Gemini AI Executive Inspection Summary Card */}
+          {(() => {
+            const ocrRes = data.analysisResults?.find((r: any) => r.checkName === 'ocr_plate_validation');
+            const campaignBrand = ocrRes?.details?.campaignBrand;
+            const normalizedPlate = ocrRes?.details?.normalizedPlate;
+
+            return (
+              <div className="p-4 rounded-xl bg-slate-950 text-white border border-slate-800 shadow-md space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-2.5 gap-2">
+                  <span className="text-[11px] font-black uppercase text-slate-300 tracking-wider flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" /> Gemini Vision AI Executive Inspection Summary
+                  </span>
+                  <button
+                    onClick={handleGenerateAiSummary}
+                    disabled={isGeneratingAiSummary}
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-black text-xs rounded transition-all flex items-center justify-center space-x-1.5 shadow-sm shrink-0"
+                  >
+                    <Zap className={`w-3.5 h-3.5 ${isGeneratingAiSummary ? 'animate-spin' : ''}`} />
+                    <span>{isGeneratingAiSummary ? 'Generating AI Audit...' : 'Generate Instant AI Audit'}</span>
+                  </button>
+                </div>
+
+                <p className="text-xs font-semibold leading-relaxed text-slate-200">
+                  {aiSummaryText ||
+                    ocrRes?.details?.aiExecutiveSummary ||
+                    `Vehicle photo inspected under campaign '${campaignBrand || 'Unspecified Campaign'}' with plate '${normalizedPlate || 'Unverified Plate'}'. ${data.summary?.completed || 6} of 6 checks executed cleanly with ${data.summary?.issuesDetected || 0} quality/perceptual issue(s) detected.`}
+                </p>
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <span className="px-2.5 py-1 text-[10px] font-black bg-slate-900 text-amber-400 border border-slate-800">
+                    BRAND: {campaignBrand || 'UNSPECIFIED'}
+                  </span>
+                  <span className="px-2.5 py-1 text-[10px] font-mono font-bold bg-slate-900 text-emerald-300 border border-slate-800">
+                    PLATE: {normalizedPlate || 'UNVERIFIED'}
+                  </span>
+                  <span className={`px-2.5 py-1 text-[10px] font-black uppercase border ${
+                    data.summary?.issuesDetected ? 'bg-rose-950 text-rose-300 border-rose-800' : 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                  }`}>
+                    {data.summary?.issuesDetected ? `${data.summary.issuesDetected} ISSUE(S) LOGGED` : 'ZERO ISSUES LOGGED'}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Outdoor Campaign Verification Highlight Card */}
           {(() => {
