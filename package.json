@@ -16,6 +16,7 @@
     "test:upload": "bash scripts/test-upload.sh"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1109.0",
     "@aws-sdk/client-ec2": "^3.1109.0",
     "@aws-sdk/client-ec2-instance-connect": "^3.1109.0",
     "@aws-sdk/client-rekognition": "^3.1109.0",

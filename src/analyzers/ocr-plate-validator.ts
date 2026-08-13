@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import { createWorker } from 'tesseract.js';
 import { RekognitionClient, DetectTextCommand } from '@aws-sdk/client-rekognition';
+import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import type { Analyzer, AnalyzerResult, ImageMetadataInput } from './types';
 import { logger } from '../lib/logger';
 
@@ -411,8 +412,13 @@ export class OcrPlateValidator implements Analyzer {
         return null;
       }
 
-      // Production-Grade Logo & Brand Extractor
-      const campaignBrand = this.extractDynamicCampaignBrand(allLineBoxes, allDetectedTextCombined);
+      // 1. AWS Bedrock Multimodal Vision AI Model (Primary Brand Extractor)
+      let campaignBrand = await this.performAwsBedrockBrandVision(buffer);
+
+      // 2. Fallback to CV Geometry Ranker if Bedrock is offline or times out
+      if (!campaignBrand) {
+        campaignBrand = this.extractDynamicCampaignBrand(allLineBoxes, allDetectedTextCombined);
+      }
 
       logger.info({ plate: bestPlate, confidence: bestConfidence, campaignBrand, boundingBox: bestBbox }, 'AWS Rekognition successfully detected license plate');
 
@@ -425,6 +431,78 @@ export class OcrPlateValidator implements Analyzer {
       };
     } catch (err) {
       logger.warn({ error: err instanceof Error ? err.message : err }, 'AWS Rekognition DetectText failed');
+      return null;
+    }
+  }
+
+  /**
+   * AWS Native Multimodal Vision AI Model (Amazon Bedrock Claude 3 Haiku)
+   * Visually recognizes corporate brand logos directly from image pixels.
+   */
+  private async performAwsBedrockBrandVision(buffer: Buffer): Promise<string | null> {
+    try {
+      const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+      const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+      const region = process.env.AWS_REGION || 'ap-south-1';
+
+      if (!accessKeyId || !secretAccessKey) return null;
+
+      const client = new BedrockRuntimeClient({
+        region,
+        credentials: { accessKeyId, secretAccessKey }
+      });
+
+      const base64Image = buffer.toString('base64');
+      const payload = {
+        anthropic_version: 'bedrock-2023-05-31',
+        max_tokens: 150,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: 'image/png',
+                  data: base64Image
+                }
+              },
+              {
+                type: 'text',
+                text: 'Identify ONLY the primary corporate brand name or advertiser logo visible on this vehicle ad wrap (e.g. ARENA ANIMATION, SriSri Tattva, Dr Agarwals Eye Hospital, CMWSSB). Do NOT return long promotional sentences, body text, or phone numbers. Return ONLY a JSON object with key: {"campaignBrand": "EXACT_BRAND_NAME"}.'
+              }
+            ]
+          }
+        ]
+      };
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2.0s fast timeout
+
+      const res = await client.send(
+        new InvokeModelCommand({
+          modelId: 'anthropic.claude-3-haiku-20240307-v1:0',
+          contentType: 'application/json',
+          accept: 'application/json',
+          body: JSON.stringify(payload)
+        }),
+        { abortSignal: controller.signal }
+      );
+      clearTimeout(timeoutId);
+
+      const bodyStr = new TextDecoder().decode(res.body);
+      const parsed = JSON.parse(bodyStr);
+      const text = parsed?.content?.[0]?.text;
+      if (!text) return null;
+
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return null;
+
+      const json = JSON.parse(jsonMatch[0]);
+      return json.campaignBrand || null;
+    } catch (err) {
+      logger.warn({ error: err instanceof Error ? err.message : err }, 'AWS Bedrock Vision AI attempt timed out or failed, falling back to CV geometry');
       return null;
     }
   }
