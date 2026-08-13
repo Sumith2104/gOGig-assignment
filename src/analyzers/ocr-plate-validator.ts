@@ -19,9 +19,9 @@ export class OcrPlateValidator implements Analyzer {
     const candidates: string[] = [];
     const textWithoutExt = rawText.replace(/\.(png|jpg|jpeg|webp)$/i, '');
 
-    // Ignore watermarks, header noise, banner text, vehicle badge noise (IND, CNG, etc.)
+    // Ignore watermarks, header noise, banner text, vehicle badge noise (IND/AND, CNG, etc.)
     const filteredText = textWithoutExt.replace(
-      /TUESDAY|MONDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY|JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|CMWSSB|PERAMBUR|CHENNAI|DIVISION|LAT|LONG|TASK|AM|PM|AGARWALS|HOSPITAL|DOCTOR|PUNE|ROAD|CITY|ARENA|ANIMATION|ILVURL|REVINT|IECRUITERS|WSRE|QRSE|HNL|RECRUITERS|CREATIVE|CAREERS|GLOBAL|ALUMNI|EXPLORE|DESIGN|DIGITAL|CONTENT|FREE|ENTRY|UK|APPOINTMENT|CALL|IND|CNG|INDIA|GOVT|COMMERCIAL/gi,
+      /TUESDAY|MONDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY|JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|CMWSSB|PERAMBUR|CHENNAI|DIVISION|LAT|LONG|TASK|AM|PM|AGARWALS|HOSPITAL|DOCTOR|PUNE|NUNE|DUNE|ROAD|CITY|ARENA|ANIMATION|ILVURL|REVINT|IECRUITERS|WSRE|QRSE|HNL|RECRUITERS|CREATIVE|CAREERS|GLOBAL|ALUMNI|EXPLORE|DESIGN|DIGITAL|CONTENT|FREE|ENTRY|UK|APPOINTMENT|CALL|IND|AND|CNG|INDIA|GOVT|COMMERCIAL|STOP|TASK/gi,
       ' '
     );
 
@@ -302,95 +302,126 @@ export class OcrPlateValidator implements Analyzer {
         credentials: { accessKeyId, secretAccessKey },
       });
 
-      // Convert to JPEG for Rekognition (max 5MB)
-      const jpegBuffer = await sharp(buffer)
+      // Prepare image passes: Pass 1: Full Image, Pass 2: Bottom-Half Crop (for tall portrait images with banner text noise)
+      const passes: {
+        cropRegion?: { left: number; top: number; width: number; height: number };
+        buffer: Buffer;
+      }[] = [];
+
+      // Pass 1: Full image
+      const fullJpeg = await sharp(buffer)
         .jpeg({ quality: 85 })
         .resize(1920, undefined, { fit: 'inside', withoutEnlargement: true })
         .toBuffer();
+      passes.push({ buffer: fullJpeg });
 
-      const command = new DetectTextCommand({
-        Image: { Bytes: jpegBuffer },
-      });
-
-      logger.info('Invoking AWS Rekognition DetectText for license plate extraction...');
-      const response = await client.send(command);
-
-      if (!response.TextDetections || response.TextDetections.length === 0) {
-        logger.warn('AWS Rekognition returned no text detections');
-        return null;
+      // Pass 2: Bottom-half crop for portrait images (where license plates are located on bumper/body)
+      if (height > width) {
+        const cropTop = Math.floor(height * 0.45);
+        const cropHeight = height - cropTop;
+        const bottomJpeg = await sharp(buffer)
+          .extract({ left: 0, top: cropTop, width: width, height: cropHeight })
+          .jpeg({ quality: 90 })
+          .toBuffer();
+        passes.push({
+          cropRegion: { left: 0, top: cropTop, width: width, height: cropHeight },
+          buffer: bottomJpeg,
+        });
       }
 
-      // Separate LINE and WORD level detections
-      const lineDetections: string[] = [];
-      const wordDetections: string[] = [];
-      const lineBoxes: { text: string; bbox?: any; confidence: number }[] = [];
-
-      for (const detection of response.TextDetections) {
-        if (!detection.DetectedText) continue;
-
-        if (detection.Type === 'LINE') {
-          lineDetections.push(detection.DetectedText);
-          lineBoxes.push({
-            text: detection.DetectedText,
-            bbox: detection.Geometry?.BoundingBox,
-            confidence: detection.Confidence || 85,
-          });
-        } else if (detection.Type === 'WORD') {
-          wordDetections.push(detection.DetectedText);
-        }
-      }
-
-      const fullText = `${lineDetections.join('\n')}\n---\n${wordDetections.join(' ')}`;
-      const candidates = Array.from(new Set([
-        ...this.extractCandidates(lineDetections.join('\n')),
-        ...this.extractCandidates(wordDetections.join(' ')),
-        ...this.extractCandidates(fullText),
-      ]));
-
+      let allDetectedTextCombined = '';
       let bestPlate: string | null = null;
       let bestBbox: { left: number; top: number; width: number; height: number } | undefined;
       let bestConfidence = 0;
 
-      for (const cand of candidates) {
-        const check = this.normalizeAndFuzzyFixPlate(cand);
-        if (check.isMatch && check.normalized) {
-          const plateStr = check.normalized;
-          bestPlate = plateStr;
-          bestConfidence = 95;
+      for (let passIndex = 0; passIndex < passes.length; passIndex++) {
+        const pass = passes[passIndex];
+        const command = new DetectTextCommand({ Image: { Bytes: pass.buffer } });
 
-          // Find bounding box for the line containing state prefix (e.g., "MH", "TN", "DL")
-          const statePrefix = plateStr.substring(0, 2);
-          const matchingLine = lineBoxes.find(l =>
-            l.text.toUpperCase().includes(statePrefix) ||
-            l.text.toUpperCase().includes(plateStr.substring(0, Math.min(4, plateStr.length)))
-          );
+        logger.info({ passIndex: passIndex + 1, isCropPass: Boolean(pass.cropRegion) }, 'Invoking AWS Rekognition DetectText...');
+        const response = await client.send(command);
 
-          if (matchingLine?.bbox) {
-            const bb = matchingLine.bbox;
-            bestBbox = {
-              left: Math.floor((bb.Left || 0) * width),
-              top: Math.floor((bb.Top || 0) * height),
-              width: Math.floor((bb.Width || 0.1) * width),
-              height: Math.floor((bb.Height || 0.05) * height),
-            };
+        if (!response.TextDetections || response.TextDetections.length === 0) continue;
+
+        const lineDetections: string[] = [];
+        const wordDetections: string[] = [];
+        const lineBoxes: { text: string; bbox?: any; confidence: number }[] = [];
+
+        for (const detection of response.TextDetections) {
+          if (!detection.DetectedText) continue;
+
+          if (detection.Type === 'LINE') {
+            lineDetections.push(detection.DetectedText);
+            lineBoxes.push({
+              text: detection.DetectedText,
+              bbox: detection.Geometry?.BoundingBox,
+              confidence: detection.Confidence || 85,
+            });
+          } else if (detection.Type === 'WORD') {
+            wordDetections.push(detection.DetectedText);
           }
-          break;
         }
+
+        const passText = `${lineDetections.join('\n')}\n${wordDetections.join(' ')}`;
+        allDetectedTextCombined += `\n${passText}`;
+
+        const candidates = Array.from(new Set([
+          ...this.extractCandidates(lineDetections.join('\n')),
+          ...this.extractCandidates(wordDetections.join(' ')),
+          ...this.extractCandidates(passText),
+        ]));
+
+        for (const cand of candidates) {
+          const check = this.normalizeAndFuzzyFixPlate(cand);
+          if (check.isMatch && check.normalized) {
+            const plateStr = check.normalized;
+            bestPlate = plateStr;
+            bestConfidence = 95;
+
+            const statePrefix = plateStr.substring(0, 2);
+            const matchingLine = lineBoxes.find(l =>
+              l.text.toUpperCase().includes(statePrefix) ||
+              l.text.toUpperCase().includes(plateStr.substring(0, Math.min(4, plateStr.length)))
+            );
+
+            if (matchingLine?.bbox) {
+              const bb = matchingLine.bbox;
+              const region = pass.cropRegion || { left: 0, top: 0, width, height };
+              bestBbox = {
+                left: region.left + Math.floor((bb.Left || 0) * region.width),
+                top: region.top + Math.floor((bb.Top || 0) * region.height),
+                width: Math.floor((bb.Width || 0.1) * region.width),
+                height: Math.floor((bb.Height || 0.05) * region.height),
+              };
+            } else if (pass.cropRegion) {
+              // Fallback bounding box relative to crop region
+              bestBbox = {
+                left: Math.floor(width * 0.25),
+                top: pass.cropRegion.top + Math.floor(pass.cropRegion.height * 0.3),
+                width: Math.floor(width * 0.50),
+                height: Math.floor(height * 0.15),
+              };
+            }
+            break;
+          }
+        }
+
+        if (bestPlate) break;
       }
 
       if (!bestPlate) {
-        logger.info({ sampleText: fullText.substring(0, 200) }, 'AWS Rekognition found text but no valid Indian plate pattern');
+        logger.info({ sampleText: allDetectedTextCombined.substring(0, 200) }, 'AWS Rekognition found text but no valid Indian plate pattern');
         return null;
       }
 
-      // Extract campaign brand from all detected text
-      const campaignBrand = this.extractCampaignBrand(fullText, '');
+      // Extract campaign brand from all detected text across all passes
+      const campaignBrand = this.extractCampaignBrand(allDetectedTextCombined, '');
 
       logger.info({ plate: bestPlate, confidence: bestConfidence, campaignBrand, boundingBox: bestBbox }, 'AWS Rekognition successfully detected license plate');
 
       return {
         plateNumber: bestPlate,
-        rawText: fullText,
+        rawText: allDetectedTextCombined,
         boundingBox: bestBbox,
         confidence: bestConfidence / 100,
         campaignBrand,
