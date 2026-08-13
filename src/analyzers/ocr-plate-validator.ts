@@ -169,10 +169,8 @@ export class OcrPlateValidator implements Analyzer {
 
     // Best production vision models ordered by speed & availability
     const candidateModels = [
-      'gemini-flash-latest',
-      'gemini-3.6-flash',
-      'gemini-3.5-flash',
       'gemini-2.5-flash',
+      'gemini-1.5-flash',
     ];
 
     const base64Image = buffer.toString('base64');
@@ -210,7 +208,7 @@ export class OcrPlateValidator implements Analyzer {
         const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout per model
+        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout per model
 
         const response = await fetch(requestUrl, {
           method: 'POST',
@@ -224,7 +222,11 @@ export class OcrPlateValidator implements Analyzer {
         if (!response.ok) {
           let errorBody = '';
           try { errorBody = await response.text(); } catch {}
-          logger.warn({ modelName, status: response.status, body: errorBody.substring(0, 300) }, 'Gemini Vision AI model returned non-OK status, trying next candidate model...');
+          logger.warn({ modelName, status: response.status, body: errorBody.substring(0, 300) }, 'Gemini Vision AI model returned non-OK status');
+          if (response.status === 429) {
+            logger.warn('Gemini API quota exceeded (429 Rate Limit), fast failing to AWS Rekognition Tier 2');
+            return null;
+          }
           continue;
         }
 
