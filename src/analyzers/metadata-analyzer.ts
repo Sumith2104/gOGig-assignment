@@ -73,68 +73,10 @@ export class MetadataAnalyzer implements Analyzer {
     return Promise.race([scanPromise, timeoutPromise]);
   }
 
-  /**
-   * Multi-factor Screenshot Detection Heuristics Engine
-   */
-  private detectScreenshotHeuristics(
-    tags: Record<string, any>,
-    width: number,
-    height: number,
-    format: string
-  ): { isScreenshot: boolean; confidenceScore: number; indicators: string[] } {
-    const indicators: string[] = [];
-    let score = 0;
-
-    const cameraMake = tags['Make']?.description;
-    const cameraModel = tags['Model']?.description;
-    const software = tags['Software']?.description;
-    const fNumber = tags['FNumber']?.description;
-    const iso = tags['ISOSpeedRatings']?.description;
-
-    // 1. Missing EXIF Camera Hardware Metadata (Strong indicator for screenshots)
-    if (!cameraMake && !cameraModel && !fNumber && !iso) {
-      score += 0.40;
-      indicators.push('EXIF camera hardware parameters missing (Make/Model/ISO/Aperture stripped)');
-    }
-
-    // 2. PNG Format Heuristic (iOS and Android screenshots default to PNG)
-    if (format.toLowerCase() === 'png' && !cameraMake) {
-      score += 0.20;
-      indicators.push('Lossless PNG image format without camera metadata');
-    }
-
-    // 3. Aspect Ratio Heuristic (Standard Mobile / Desktop Screen Ratios: 19.5:9, 20:9, 16:9)
-    if (width > 0 && height > 0) {
-      const ratio = Math.max(width, height) / Math.min(width, height);
-      const isScreenRatio = (
-        Math.abs(ratio - 16 / 9) < 0.03 ||   // 1.777 (16:9 standard desktop/phone)
-        Math.abs(ratio - 19.5 / 9) < 0.05 || // 2.166 (iPhone X-15 modern notch aspect)
-        Math.abs(ratio - 20 / 9) < 0.05 ||   // 2.222 (Android tall screen aspect)
-        Math.abs(ratio - 18 / 9) < 0.03      // 2.000 (18:9 screen aspect)
-      );
-
-      if (isScreenRatio && !cameraMake) {
-        score += 0.25;
-        indicators.push(`Exact mobile/desktop screen display aspect ratio detected (${ratio.toFixed(2)}:1)`);
-      }
-    }
-
-    // 4. Software Tag Heuristic
-    if (software && /screenshot|iOS|Android|System|Capture|Snipping/i.test(software)) {
-      score += 0.35;
-      indicators.push(`Software tag indicates screen capture engine: ${software}`);
-    }
-
-    const confidenceScore = Math.min(1.0, Math.round(score * 100) / 100);
-    const isScreenshot = confidenceScore >= 0.50;
-
-    return { isScreenshot, confidenceScore, indicators };
-  }
-
   async analyze(
     _imagePath: string,
     imageBuffer: Buffer,
-    inputMeta: ImageMetadataInput
+    _metadata: ImageMetadataInput
   ): Promise<AnalyzerResult> {
     const anomalies: string[] = [];
     let cameraMake: string | null = null;
@@ -170,18 +112,6 @@ export class MetadataAnalyzer implements Analyzer {
         }
       }
 
-      // Run Multi-Factor Screenshot Detection Heuristics
-      const screenshotAnalysis = this.detectScreenshotHeuristics(
-        tags,
-        inputMeta.width,
-        inputMeta.height,
-        inputMeta.format
-      );
-
-      if (screenshotAnalysis.isScreenshot) {
-        anomalies.push(`Screenshot detection heuristic triggered (Confidence: ${(screenshotAnalysis.confidenceScore * 100).toFixed(0)}%)`);
-      }
-
       // Anomaly heuristics
       if (!cameraMake && !cameraModel && !hasGps) {
         anomalies.push('Missing camera make/model metadata (potential digital crop or screenshot)');
@@ -213,11 +143,6 @@ export class MetadataAnalyzer implements Analyzer {
           longitude,
           dateTime,
           software,
-          screenshotDetection: {
-            isScreenshot: screenshotAnalysis.isScreenshot,
-            confidenceScore: screenshotAnalysis.confidenceScore,
-            indicators: screenshotAnalysis.indicators,
-          },
           anomaliesCount: anomalies.length,
           anomalies,
           hasExifData: Object.keys(tags).length > 0,
@@ -227,16 +152,9 @@ export class MetadataAnalyzer implements Analyzer {
       // Perform Visual GPS Watermark Scan even if EXIF loading fails completely
       const visualGps = await this.scanVisualGpsWatermark(imageBuffer);
 
-      const screenshotAnalysis = this.detectScreenshotHeuristics(
-        {},
-        inputMeta.width,
-        inputMeta.height,
-        inputMeta.format
-      );
-
       return {
         checkName: this.name,
-        passed: !screenshotAnalysis.isScreenshot,
+        passed: true,
         score: visualGps.hasGps ? 0.9 : 0.5,
         details: {
           cameraMake: null,
@@ -247,11 +165,6 @@ export class MetadataAnalyzer implements Analyzer {
           longitude: visualGps.longitude || null,
           dateTime: null,
           software: null,
-          screenshotDetection: {
-            isScreenshot: screenshotAnalysis.isScreenshot,
-            confidenceScore: screenshotAnalysis.confidenceScore,
-            indicators: screenshotAnalysis.indicators,
-          },
           anomaliesCount: visualGps.hasGps ? 0 : 1,
           anomalies: visualGps.hasGps ? [] : ['No EXIF metadata header present in image file'],
           hasExifData: false,
@@ -260,4 +173,3 @@ export class MetadataAnalyzer implements Analyzer {
     }
   }
 }
-

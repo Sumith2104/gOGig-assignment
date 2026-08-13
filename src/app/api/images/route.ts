@@ -1,34 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { imageService } from '@/services/image-service';
 import { ProcessingStatus } from '@prisma/client';
-import { checkRateLimit, getClientIp } from '@/lib/rate-limiter';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    // Rate limiting: 60 reads per minute per IP
-    const clientIp = getClientIp(request);
-    const rateLimit = await checkRateLimit(clientIp, 'read');
-
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        {
-          error: 'RATE_LIMIT_EXCEEDED',
-          message: `Rate limit exceeded. Maximum ${rateLimit.limit} requests per minute.`,
-          retryAfterSeconds: rateLimit.resetInSeconds,
-        },
-        {
-          status: 429,
-          headers: {
-            'Retry-After': String(rateLimit.resetInSeconds),
-            'X-RateLimit-Limit': String(rateLimit.limit),
-            'X-RateLimit-Remaining': String(rateLimit.remaining),
-          },
-        }
-      );
-    }
-
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
@@ -37,12 +14,7 @@ export async function GET(request: NextRequest) {
     const validStatus = statusParam && Object.values(ProcessingStatus).includes(statusParam) ? statusParam : undefined;
 
     const result = await imageService.listImages(page, limit, validStatus);
-    return NextResponse.json(result, {
-      headers: {
-        'X-RateLimit-Limit': String(rateLimit.limit),
-        'X-RateLimit-Remaining': String(rateLimit.remaining),
-      },
-    });
+    return NextResponse.json(result);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Error listing images';
     return NextResponse.json(
@@ -51,4 +23,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

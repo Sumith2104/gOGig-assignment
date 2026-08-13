@@ -1,7 +1,7 @@
 services:
   api:
     build: .
-    command: sh -c "npx prisma db push --accept-data-loss && npm run start"
+    command: sh -c "npx prisma db push && npm run start"
     ports:
       - "3000:3000"
     environment:

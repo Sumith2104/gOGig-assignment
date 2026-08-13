@@ -168,18 +168,18 @@ export class OcrPlateValidator implements Analyzer {
 
     // Best production vision models ordered by speed & availability
     const candidateModels = [
-      'gemini-2.5-flash',
+      'gemini-flash-latest',
       'gemini-3.6-flash',
       'gemini-3.5-flash',
-      'gemini-flash-latest',
+      'gemini-2.5-flash',
     ];
 
     const base64Image = buffer.toString('base64');
     const promptText = `Analyze this vehicle image and find the vehicle registration number / license plate AND any prominent outdoor campaign advertisement brand name. Look carefully at bumper plates, yellow commercial 2-line plates (e.g. auto-rickshaws with line 1 "MH12K" and line 2 "R1145" -> return "MH12KR1145", "HR55U" + "0390" -> "HR55U0390"), white plates, and rear/side body numbers. Return ONLY a JSON object with keys:
 "plateNumber": normalized uppercase string without spaces/hyphens (e.g. "MH12KR1145", "HR55U0390", "TN05BT5754", "MH12NW8556"), or null if no plate present,
-"campaignBrand": prominent advertisement brand name, slogan, or campaign title visible on the vehicle hood wrap/banner (e.g. "ARENA ANIMATION", "Dr Agarwals Eye Hospital", "PUNE-FC ROAD 7755900813"), or null if none,
+"campaignBrand": prominent advertisement brand name, slogan, or campaign title visible on the vehicle hood wrap/banner (e.g. "ARENA ANIMATION", "PUNE-FC ROAD 7755900813"), or null if none,
 "rawText": unmodified exact printed text,
-"boundingBox": object with keys "leftPercent", "topPercent", "widthPercent", "heightPercent" (numbers between 0 and 100 representing bounding box location of ONLY the license plate itself),
+"boundingBox": object with keys "leftPercent", "topPercent", "widthPercent", "heightPercent" (numbers between 0 and 100 representing bounding box location),
 "confidence": confidence score between 0.0 and 1.0,
 "plateColor": string like "yellow" or "white".`;
 
@@ -242,19 +242,13 @@ export class OcrPlateValidator implements Analyzer {
         const finalPlate = normResult.isMatch ? normResult.normalized : parsed.plateNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
         let bbox: { left: number; top: number; width: number; height: number } | undefined;
-        if (parsed.boundingBox) {
-          const l = parsed.boundingBox.leftPercent ?? parsed.boundingBox.left;
-          const t = parsed.boundingBox.topPercent ?? parsed.boundingBox.top;
-          const w = parsed.boundingBox.widthPercent ?? parsed.boundingBox.width;
-          const h = parsed.boundingBox.heightPercent ?? parsed.boundingBox.height;
-          if (typeof l === 'number' && typeof t === 'number' && typeof w === 'number' && typeof h === 'number') {
-            bbox = {
-              left: Math.floor(l > 1 ? (l / 100) * width : l * width),
-              top: Math.floor(t > 1 ? (t / 100) * height : t * height),
-              width: Math.floor(w > 1 ? (w / 100) * width : w * width),
-              height: Math.floor(h > 1 ? (h / 100) * height : h * height),
-            };
-          }
+        if (parsed.boundingBox && typeof parsed.boundingBox.leftPercent === 'number') {
+          bbox = {
+            left: Math.floor((parsed.boundingBox.leftPercent / 100) * width),
+            top: Math.floor((parsed.boundingBox.topPercent / 100) * height),
+            width: Math.floor((parsed.boundingBox.widthPercent / 100) * width),
+            height: Math.floor((parsed.boundingBox.heightPercent / 100) * height),
+          };
         }
 
         return {
@@ -274,89 +268,6 @@ export class OcrPlateValidator implements Analyzer {
     return null;
   }
 
-  private async findYellowPlateBoundingBox(
-    buffer: Buffer,
-    imgW: number,
-    imgH: number
-  ): Promise<{ left: number; top: number; width: number; height: number } | null> {
-    try {
-      const { data, info } = await sharp(buffer)
-        .resize(360, undefined, { fit: 'inside' })
-        .raw()
-        .toBuffer({ resolveWithObject: true });
-
-      const scaleX = imgW / info.width;
-      const scaleY = imgH / info.height;
-      const channels = info.channels;
-
-      let minX = info.width;
-      let maxX = 0;
-      let minY = info.height;
-      let maxY = 0;
-      let count = 0;
-
-      // Scan lower 50% of image for yellow license plate pixels
-      const startY = Math.floor(info.height * 0.50);
-
-      for (let y = startY; y < info.height; y++) {
-        for (let x = 0; x < info.width; x++) {
-          const idx = (y * info.width + x) * channels;
-          const r = data[idx];
-          const g = data[idx + 1];
-          const b = data[idx + 2];
-
-          // Bright yellow license plate color filter
-          if (r > 160 && g > 135 && b < 125 && (r + g) / 2 - b > 50) {
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-            count++;
-          }
-        }
-      }
-
-      // If a valid cluster of yellow pixels is found
-      if (count > 60 && maxX > minX && maxY > minY) {
-        const boxW = (maxX - minX + 1) * scaleX;
-        const boxH = (maxY - minY + 1) * scaleY;
-        const boxRatio = boxW / boxH;
-
-        if (boxRatio >= 1.0 && boxRatio <= 3.5 && boxW < imgW * 0.5) {
-          return {
-            left: Math.max(0, Math.floor((minX - 3) * scaleX)),
-            top: Math.max(0, Math.floor((minY - 3) * scaleY)),
-            width: Math.floor(boxW + 6 * scaleX),
-            height: Math.floor(boxH + 6 * scaleY),
-          };
-        }
-      }
-    } catch {}
-    return null;
-  }
-
-  private async calculateTightPlateBox(buffer: Buffer, width: number, height: number, isPortrait: boolean) {
-    const yellowBox = await this.findYellowPlateBoundingBox(buffer, width, height);
-    if (yellowBox) {
-      return yellowBox;
-    }
-
-    if (isPortrait) {
-      return {
-        left: Math.floor(width * 0.585),
-        top: Math.floor(height * 0.598),
-        width: Math.floor(width * 0.19),
-        height: Math.floor(height * 0.085),
-      };
-    }
-    return {
-      left: Math.floor(width * 0.55),
-      top: Math.floor(height * 0.65),
-      width: Math.floor(width * 0.35),
-      height: Math.floor(height * 0.14),
-    };
-  }
-
   private async performOcrWithTimeout(
     buffer: Buffer,
     timeoutMs = 8000
@@ -373,12 +284,16 @@ export class OcrPlateValidator implements Analyzer {
       const metadata = await sharp(buffer).metadata();
       const width = metadata.width || 800;
       const height = metadata.height || 800;
-      const isPortrait = height > width;
 
       // Check Gemini Vision AI first if API key configured
       const geminiResult = await this.performGeminiVisionOCR(buffer, width, height);
       if (geminiResult && geminiResult.plateNumber) {
-        const bbox = geminiResult.boundingBox || await this.calculateTightPlateBox(buffer, width, height, isPortrait);
+        const bbox = geminiResult.boundingBox || {
+          left: Math.floor(width * 0.40),
+          top: Math.floor(height * 0.62),
+          width: Math.floor(width * 0.50),
+          height: Math.floor(height * 0.25),
+        };
         return {
           text: geminiResult.rawText || geminiResult.plateNumber,
           boundingBox: bbox,
@@ -393,6 +308,7 @@ export class OcrPlateValidator implements Analyzer {
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -.',
       });
 
+      const isPortrait = height > width;
       const aspectRatio = width / height;
       logger.info({ width, height, isPortrait, aspectRatio: aspectRatio.toFixed(2) }, 'OCR image orientation detected');
 
@@ -433,6 +349,8 @@ export class OcrPlateValidator implements Analyzer {
 
       // Helper: try yellow plate isolation on a crop
       const isolateYellowPlate = async (cropBuffer: Buffer): Promise<Buffer> => {
+        // Convert to greyscale with yellow-channel emphasis
+        // Yellow plates: high R, high G, low B — isolate by removing blue channel
         const { data, info } = await sharp(cropBuffer)
           .raw()
           .toBuffer({ resolveWithObject: true });
@@ -443,9 +361,11 @@ export class OcrPlateValidator implements Analyzer {
           const r = data[i * channels];
           const g = data[i * channels + 1];
           const b = data[i * channels + 2];
+          // Yellow detection: if R > 150 and G > 120 and B < 120, make white (text region); else black
           if (r > 150 && g > 120 && b < 130) {
             greyBuf[i] = 255;
           } else if (r > 50 && g > 50 && b < 80 && r > b * 1.5) {
+            // Darker yellow / amber tones
             greyBuf[i] = 220;
           } else {
             greyBuf[i] = 0;
@@ -486,10 +406,7 @@ export class OcrPlateValidator implements Analyzer {
           if (checkA.isMatch) {
             logger.info({ region: region.label, plate: checkA.normalized, strategy: 'greyscale' }, 'Plate found via crop');
             await worker.terminate();
-            return {
-              text: textA,
-              boundingBox: await this.calculateTightPlateBox(buffer, width, height, isPortrait),
-            };
+            return { text: textA, boundingBox: { left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight } };
           }
           allTexts.push(textA);
 
@@ -502,10 +419,7 @@ export class OcrPlateValidator implements Analyzer {
             if (checkB.isMatch) {
               logger.info({ region: region.label, plate: checkB.normalized, strategy: 'yellow-isolation' }, 'Plate found via yellow isolation');
               await worker.terminate();
-              return {
-                text: textB,
-                boundingBox: await this.calculateTightPlateBox(buffer, width, height, isPortrait),
-              };
+              return { text: textB, boundingBox: { left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight } };
             }
             allTexts.push(textB);
           } catch {
@@ -530,9 +444,15 @@ export class OcrPlateValidator implements Analyzer {
         if (fullCheck.isMatch) {
           logger.info({ plate: fullCheck.normalized, strategy: 'full-image-scan' }, 'Plate found via full image OCR');
           await worker.terminate();
+          // Default bounding box: bottom-center of image (best guess for plate location)
           return {
             text: fullText,
-            boundingBox: await this.calculateTightPlateBox(buffer, width, height, isPortrait),
+            boundingBox: {
+              left: Math.floor(width * 0.25),
+              top: Math.floor(height * 0.70),
+              width: Math.floor(width * 0.50),
+              height: Math.floor(height * 0.20),
+            },
           };
         }
         allTexts.push(fullText);
@@ -548,13 +468,23 @@ export class OcrPlateValidator implements Analyzer {
       if (combinedCheck.isMatch) {
         return {
           text: combinedText,
-          boundingBox: await this.calculateTightPlateBox(buffer, width, height, isPortrait),
+          boundingBox: {
+            left: Math.floor(width * 0.25),
+            top: Math.floor(height * 0.70),
+            width: Math.floor(width * 0.50),
+            height: Math.floor(height * 0.20),
+          },
         };
       }
 
       return {
         text: combinedText,
-        boundingBox: await this.calculateTightPlateBox(buffer, width, height, isPortrait),
+        boundingBox: {
+          left: Math.floor(width * (isPortrait ? 0.10 : 0.55)),
+          top: Math.floor(height * 0.72),
+          width: Math.floor(width * (isPortrait ? 0.80 : 0.40)),
+          height: Math.floor(height * 0.20),
+        },
       };
     })();
 
