@@ -133,7 +133,7 @@ export async function processImageJob(job: Job<{ imageId: string }>) {
         // Estimate plate search region based on orientation
         const isPortrait = imgH > imgW;
         bbox = isPortrait
-          ? { left: Math.floor(imgW * 0.10), top: Math.floor(imgH * 0.72), width: Math.floor(imgW * 0.80), height: Math.floor(imgH * 0.20) }
+          ? { left: Math.floor(imgW * 0.58), top: Math.floor(imgH * 0.60), width: Math.floor(imgW * 0.35), height: Math.floor(imgH * 0.14) }
           : { left: Math.floor(imgW * 0.55), top: Math.floor(imgH * 0.65), width: Math.floor(imgW * 0.40), height: Math.floor(imgH * 0.30) };
       }
 

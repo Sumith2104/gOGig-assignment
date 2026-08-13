@@ -168,11 +168,12 @@ export class OcrPlateValidator implements Analyzer {
 
     // Best production vision models ordered by speed & availability
     const candidateModels = [
-      'gemini-flash-latest',
-      'gemini-3.6-flash',
-      'gemini-3.5-flash',
-      'gemini-2.5-flash',
+      'gemini-1.5-flash',
+      'gemini-1.5-flash-latest',
+      'gemini-2.0-flash-exp',
+      'gemini-1.5-pro',
     ];
+
 
     const base64Image = buffer.toString('base64');
     const promptText = `Analyze this vehicle image and find the vehicle registration number / license plate AND any prominent outdoor campaign advertisement brand name. Look carefully at bumper plates, yellow commercial 2-line plates (e.g. auto-rickshaws with line 1 "MH12K" and line 2 "R1145" -> return "MH12KR1145", "HR55U" + "0390" -> "HR55U0390"), white plates, and rear/side body numbers. Return ONLY a JSON object with keys:
@@ -480,10 +481,10 @@ export class OcrPlateValidator implements Analyzer {
       return {
         text: combinedText,
         boundingBox: {
-          left: Math.floor(width * (isPortrait ? 0.10 : 0.55)),
-          top: Math.floor(height * 0.72),
-          width: Math.floor(width * (isPortrait ? 0.80 : 0.40)),
-          height: Math.floor(height * 0.20),
+          left: Math.floor(width * (isPortrait ? 0.58 : 0.55)),
+          top: Math.floor(height * (isPortrait ? 0.60 : 0.65)),
+          width: Math.floor(width * (isPortrait ? 0.35 : 0.40)),
+          height: Math.floor(height * (isPortrait ? 0.14 : 0.20)),
         },
       };
     })();
