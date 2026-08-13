@@ -271,6 +271,9 @@ export class OcrPlateValidator implements Analyzer {
       }
     }
 
+    return null;
+  }
+
   private async findYellowPlateBoundingBox(
     buffer: Buffer,
     imgW: number,
