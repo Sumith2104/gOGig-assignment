@@ -415,10 +415,15 @@ Return ONLY a JSON object with keys:
         return null;
       }
 
-      // 1. User's 3-Step Hybrid Architecture: Pass raw OCR text + Image into AI Vision Model
-      let campaignBrand = await this.performAwsBedrockBrandVision(buffer, allDetectedTextCombined);
+      // 1. User Pipeline: Send extracted OCR text + Image to Gemini AI Vision model with user prompt
+      let campaignBrand = await this.performGeminiBrandExtractionWithOcr(buffer, allDetectedTextCombined);
 
-      // 2. Fallback to CV Geometry Ranker if Bedrock is offline or times out
+      // 2. Secondary AI Fallback: AWS Bedrock Claude Vision
+      if (!campaignBrand) {
+        campaignBrand = await this.performAwsBedrockBrandVision(buffer, allDetectedTextCombined);
+      }
+
+      // 3. Computer Vision Geometry Ranker Fallback
       if (!campaignBrand) {
         campaignBrand = this.extractDynamicCampaignBrand(allLineBoxes, allDetectedTextCombined, bestPlate);
       }
@@ -582,6 +587,71 @@ Compare BOTH the image and the extracted text to identify the primary corporate 
     return rawBrand.replace(/\s+/g, ' ').trim();
   }
 
+  /**
+   * User Pipeline: Pass raw OCR text from AWS Rekognition + Image to Gemini Vision AI model.
+   * Gemini evaluates all visible text & image, then generates the clean corporate brand name.
+   */
+  private async performGeminiBrandExtractionWithOcr(buffer: Buffer, rawOcrText: string): Promise<string | null> {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey.trim() === '') return null;
+
+      const base64Image = buffer.toString('base64');
+      const promptText = `Here is the raw text extracted from the image by AWS Rekognition OCR scanner:
+
+--- EXTRACTED OCR TEXT ---
+${rawOcrText}
+--------------------------
+
+Scan the provided image and evaluate all the visible text.
+Identify and output only the primary company or brand name mentioned in the advertisement.
+
+Return ONLY a JSON object: {"campaignBrand": "PRIMARY_BRAND_NAME"}`;
+
+      const requestBody = JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: promptText },
+              { inlineData: { mimeType: 'image/jpeg', data: base64Image } }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: 'application/json'
+        }
+      });
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+      const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: requestBody,
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) return null;
+
+      const responseData = await response.json();
+      const textOutput = responseData?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!textOutput) return null;
+
+      const jsonMatch = textOutput.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return null;
+
+      const json = JSON.parse(jsonMatch[0]);
+      return json.campaignBrand || null;
+    } catch (err) {
+      logger.warn({ error: err instanceof Error ? err.message : err }, 'Gemini OCR brand extraction failed or timed out');
+      return null;
+    }
+  }
+
   private async performOcrWithTimeout(
     buffer: Buffer,
     timeoutMs = 8000
@@ -599,25 +669,7 @@ Compare BOTH the image and the extracted text to identify the primary corporate 
       const width = metadata.width || 800;
       const height = metadata.height || 800;
 
-      // Tier 1: Google Gemini Vision AI (Primary: Evaluate image & visible text, extract primary brand name & license plate)
-      const geminiResult = await this.performGeminiVisionOCR(buffer, width, height);
-      if (geminiResult && geminiResult.plateNumber) {
-        const bbox = geminiResult.boundingBox || {
-          left: Math.floor(width * 0.40),
-          top: Math.floor(height * 0.62),
-          width: Math.floor(width * 0.50),
-          height: Math.floor(height * 0.25),
-        };
-        return {
-          text: geminiResult.rawText || geminiResult.plateNumber,
-          boundingBox: bbox,
-          sourceAI: true,
-          confidence: geminiResult.confidence,
-          campaignBrand: geminiResult.campaignBrand || null,
-        };
-      }
-
-      // Tier 2: AWS Rekognition DetectText (Fallback)
+      // Tier 1: AWS Rekognition (MAIN MODEL - Fast ~1s, 100% SLA, Bounding Box Precise)
       const rekognitionResult = await this.performAwsRekognitionOCR(buffer, width, height);
       if (rekognitionResult && rekognitionResult.plateNumber) {
         const bbox = rekognitionResult.boundingBox || {
@@ -632,6 +684,24 @@ Compare BOTH the image and the extracted text to identify the primary corporate 
           sourceAI: true,
           confidence: rekognitionResult.confidence,
           campaignBrand: rekognitionResult.campaignBrand || null,
+        };
+      }
+
+      // Tier 2: Google Gemini Vision AI (Fallback)
+      const geminiResult = await this.performGeminiVisionOCR(buffer, width, height);
+      if (geminiResult && geminiResult.plateNumber) {
+        const bbox = geminiResult.boundingBox || {
+          left: Math.floor(width * 0.40),
+          top: Math.floor(height * 0.62),
+          width: Math.floor(width * 0.50),
+          height: Math.floor(height * 0.25),
+        };
+        return {
+          text: geminiResult.rawText || geminiResult.plateNumber,
+          boundingBox: bbox,
+          sourceAI: true,
+          confidence: geminiResult.confidence,
+          campaignBrand: geminiResult.campaignBrand || null,
         };
       }
 
