@@ -271,24 +271,86 @@ export class OcrPlateValidator implements Analyzer {
       }
     }
 
+  private async findYellowPlateBoundingBox(
+    buffer: Buffer,
+    imgW: number,
+    imgH: number
+  ): Promise<{ left: number; top: number; width: number; height: number } | null> {
+    try {
+      const { data, info } = await sharp(buffer)
+        .resize(360, undefined, { fit: 'inside' })
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      const scaleX = imgW / info.width;
+      const scaleY = imgH / info.height;
+      const channels = info.channels;
+
+      let minX = info.width;
+      let maxX = 0;
+      let minY = info.height;
+      let maxY = 0;
+      let count = 0;
+
+      // Scan lower 50% of image for yellow license plate pixels
+      const startY = Math.floor(info.height * 0.50);
+
+      for (let y = startY; y < info.height; y++) {
+        for (let x = 0; x < info.width; x++) {
+          const idx = (y * info.width + x) * channels;
+          const r = data[idx];
+          const g = data[idx + 1];
+          const b = data[idx + 2];
+
+          // Bright yellow license plate color filter
+          if (r > 160 && g > 135 && b < 125 && (r + g) / 2 - b > 50) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+            count++;
+          }
+        }
+      }
+
+      // If a valid cluster of yellow pixels is found
+      if (count > 60 && maxX > minX && maxY > minY) {
+        const boxW = (maxX - minX + 1) * scaleX;
+        const boxH = (maxY - minY + 1) * scaleY;
+        const boxRatio = boxW / boxH;
+
+        if (boxRatio >= 1.0 && boxRatio <= 3.5 && boxW < imgW * 0.5) {
+          return {
+            left: Math.max(0, Math.floor((minX - 3) * scaleX)),
+            top: Math.max(0, Math.floor((minY - 3) * scaleY)),
+            width: Math.floor(boxW + 6 * scaleX),
+            height: Math.floor(boxH + 6 * scaleY),
+          };
+        }
+      }
+    } catch {}
     return null;
   }
 
-  private calculateTightPlateBox(width: number, height: number, isPortrait: boolean) {
+  private async calculateTightPlateBox(buffer: Buffer, width: number, height: number, isPortrait: boolean) {
+    const yellowBox = await this.findYellowPlateBoundingBox(buffer, width, height);
+    if (yellowBox) {
+      return yellowBox;
+    }
+
     if (isPortrait) {
-      // Auto-rickshaw lower-right yellow bumper license plate
       return {
-        left: Math.floor(width * 0.58),
-        top: Math.floor(height * 0.59),
-        width: Math.floor(width * 0.34),
-        height: Math.floor(height * 0.10),
+        left: Math.floor(width * 0.585),
+        top: Math.floor(height * 0.598),
+        width: Math.floor(width * 0.19),
+        height: Math.floor(height * 0.085),
       };
     }
     return {
       left: Math.floor(width * 0.55),
       top: Math.floor(height * 0.65),
-      width: Math.floor(width * 0.38),
-      height: Math.floor(height * 0.16),
+      width: Math.floor(width * 0.35),
+      height: Math.floor(height * 0.14),
     };
   }
 
@@ -313,7 +375,7 @@ export class OcrPlateValidator implements Analyzer {
       // Check Gemini Vision AI first if API key configured
       const geminiResult = await this.performGeminiVisionOCR(buffer, width, height);
       if (geminiResult && geminiResult.plateNumber) {
-        const bbox = geminiResult.boundingBox || this.calculateTightPlateBox(width, height, isPortrait);
+        const bbox = geminiResult.boundingBox || await this.calculateTightPlateBox(buffer, width, height, isPortrait);
         return {
           text: geminiResult.rawText || geminiResult.plateNumber,
           boundingBox: bbox,
@@ -368,8 +430,6 @@ export class OcrPlateValidator implements Analyzer {
 
       // Helper: try yellow plate isolation on a crop
       const isolateYellowPlate = async (cropBuffer: Buffer): Promise<Buffer> => {
-        // Convert to greyscale with yellow-channel emphasis
-        // Yellow plates: high R, high G, low B — isolate by removing blue channel
         const { data, info } = await sharp(cropBuffer)
           .raw()
           .toBuffer({ resolveWithObject: true });
@@ -380,11 +440,9 @@ export class OcrPlateValidator implements Analyzer {
           const r = data[i * channels];
           const g = data[i * channels + 1];
           const b = data[i * channels + 2];
-          // Yellow detection: if R > 150 and G > 120 and B < 120, make white (text region); else black
           if (r > 150 && g > 120 && b < 130) {
             greyBuf[i] = 255;
           } else if (r > 50 && g > 50 && b < 80 && r > b * 1.5) {
-            // Darker yellow / amber tones
             greyBuf[i] = 220;
           } else {
             greyBuf[i] = 0;
@@ -427,7 +485,7 @@ export class OcrPlateValidator implements Analyzer {
             await worker.terminate();
             return {
               text: textA,
-              boundingBox: this.calculateTightPlateBox(width, height, isPortrait),
+              boundingBox: await this.calculateTightPlateBox(buffer, width, height, isPortrait),
             };
           }
           allTexts.push(textA);
@@ -443,7 +501,7 @@ export class OcrPlateValidator implements Analyzer {
               await worker.terminate();
               return {
                 text: textB,
-                boundingBox: this.calculateTightPlateBox(width, height, isPortrait),
+                boundingBox: await this.calculateTightPlateBox(buffer, width, height, isPortrait),
               };
             }
             allTexts.push(textB);
@@ -471,7 +529,7 @@ export class OcrPlateValidator implements Analyzer {
           await worker.terminate();
           return {
             text: fullText,
-            boundingBox: this.calculateTightPlateBox(width, height, isPortrait),
+            boundingBox: await this.calculateTightPlateBox(buffer, width, height, isPortrait),
           };
         }
         allTexts.push(fullText);
@@ -487,13 +545,13 @@ export class OcrPlateValidator implements Analyzer {
       if (combinedCheck.isMatch) {
         return {
           text: combinedText,
-          boundingBox: this.calculateTightPlateBox(width, height, isPortrait),
+          boundingBox: await this.calculateTightPlateBox(buffer, width, height, isPortrait),
         };
       }
 
       return {
         text: combinedText,
-        boundingBox: this.calculateTightPlateBox(width, height, isPortrait),
+        boundingBox: await this.calculateTightPlateBox(buffer, width, height, isPortrait),
       };
     })();
 
