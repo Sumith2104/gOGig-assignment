@@ -1,0 +1,49 @@
+{
+  "name": "gogig-media-pipeline",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "worker": "tsx worker.ts",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate",
+    "db:seed": "tsx prisma/seed.ts",
+    "docker:dev": "docker-compose -f docker-compose.dev.yml up --build",
+    "test": "tsx scripts/run-tests.ts",
+    "test:upload": "bash scripts/test-upload.sh"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bullmq": "^5.34.0",
+    "clsx": "^2.1.1",
+    "exifreader": "^4.26.0",
+    "file-type": "^16.5.4",
+    "framer-motion": "^11.15.0",
+    "image-hash": "^5.3.2",
+    "ioredis": "^5.4.1",
+    "lucide-react": "^0.468.0",
+    "next": "^14.2.20",
+    "pino": "^9.5.0",
+    "prisma": "^5.22.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "sharp": "^0.33.5",
+    "tailwind-merge": "^2.5.5",
+    "tesseract.js": "^5.1.1",
+    "tsx": "^4.19.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.10",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "autoprefixer": "^10.4.20",
+    "pino-pretty": "^13.0.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.16",
+    "typescript": "^5.7.2"
+  }
+}

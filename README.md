@@ -1,5 +1,3 @@
-<![CDATA[<div align="center">
-
 # VehicleIQ
 
 **Intelligent Media Processing Pipeline for Outdoor Campaign Ad Verification**
@@ -13,8 +11,6 @@
 
 > A production-grade asynchronous backend system that ingests vehicle images from field operators, processes them through a 6-stage computer vision pipeline, and extracts campaign brand names and license plates using a hybrid AI architecture.
 
-</div>
-
 ---
 
 ## Table of Contents
@@ -25,6 +21,7 @@
 - [Key Technical Capabilities](#-key-technical-capabilities)
 - [Analysis Pipeline](#-6-stage-analysis-pipeline)
 - [AI-Powered OCR & Brand Extraction](#-ai-powered-ocr--brand-extraction)
+- [Live Demo & Inspection Reports](#-live-demo--inspection-reports)
 - [API Reference](#-api-reference)
 - [Engineering Trade-offs](#-engineering-trade-offs)
 - [AI Usage Disclosure](#-ai-usage-disclosure)
@@ -259,6 +256,91 @@ The OCR & Plate Validation analyzer uses a **3-tier hybrid AI architecture** for
 
 ---
 
+## 📸 Live Demo & Inspection Reports
+
+> **Live Deployment**: [https://13.234.120.49.sslip.io/images](https://13.234.120.49.sslip.io/images)
+
+### Image Analysis Gallery Overview
+
+The interactive gallery provides real-time visibility into all ingested vehicles, showing processing state, detected brand, recognized license plate, and immediate inspection access.
+
+![Gallery Overview — Ingested vehicle batch with COMPLETED status](docs/screenshots/gallery_page.png)
+
+---
+
+### Report 1: `3.png` — ARENA ANIMATION / MH12KR1145
+
+| Inspection Attribute | Extracted Value |
+|:---------------------|:----------------|
+| **Image ID** | `6ec0deb2-b595-4d3d-ac07-4b51ce16b83c` |
+| **File Specs** | 1.09 MB · PNG (720 × 1280) |
+| **Processing Time** | 7.86s (Async Worker Pipeline) |
+| **Campaign Brand** | **ARENA ANIMATION** |
+| **License Plate** | **MH12KR1145** |
+| **Overall Quality Score** | **5 / 6 Checks Passed (83%)** |
+
+| Check Stage | Verification Status | Algorithmic Metric / Findings |
+|:------------|:-------------------:|:------------------------------|
+| **Blur Detection** | Passed | Laplacian StDev: `16.16` (Sharp focus verified) |
+| **Brightness Analysis** | Passed | Mean Luminance: `104.23` (Optimal daylight exposure) |
+| **Duplicate Detection** | Passed | 64-bit dHash Hamming Distance: `30` (Unique image) |
+| **OCR & Plate Validation** | Passed | **MH12KR1145** — Extracted via Hybrid Vision AI |
+| **Dimension Validation** | Passed | 720 × 1280, Aspect Ratio: `0.56` (Valid portrait) |
+| **Metadata Analysis** | Flagged | Camera EXIF stripped by messaging app |
+
+![Inspection Report: 3.png — ARENA ANIMATION MH12KR1145](docs/screenshots/report_3_png.png)
+
+---
+
+### Report 2: `2.png` — Dr Agarwals Eye Hospital / TN05BT5754
+
+| Inspection Attribute | Extracted Value |
+|:---------------------|:----------------|
+| **Image ID** | `585b6e6d-f91f-4dcf-8ec0-e0e093f3fdb7` |
+| **File Specs** | 1.62 MB · PNG (960 × 1280) |
+| **Processing Time** | 9.83s (Async Worker Pipeline) |
+| **Campaign Brand** | **Dr Agarwals Eye Hospital** |
+| **License Plate** | **TN05BT5754** |
+| **Overall Quality Score** | **6 / 6 Checks Passed (100% - Perfect Score)** |
+| **GPS Geotag Found** | **Lat: 13.1059115, Lon: 80.2514811** (Visual Watermark Overlay) |
+
+| Check Stage | Verification Status | Algorithmic Metric / Findings |
+|:------------|:-------------------:|:------------------------------|
+| **Blur Detection** | Passed | Laplacian StDev: `24.28` (Crisp edge contrast) |
+| **Brightness Analysis** | Passed | Mean Luminance: `121.28` (Balanced illumination) |
+| **Duplicate Detection** | Passed | 64-bit dHash Hamming Distance: `37` (Unique asset) |
+| **OCR & Plate Validation** | Passed | **TN05BT5754** — Extracted via Hybrid Vision AI |
+| **Dimension Validation** | Passed | 960 × 1280, Aspect Ratio: `0.75` (Standard ratio) |
+| **Metadata Analysis** | Passed | EXIF & GPS watermark verified, zero anomalies |
+
+![Inspection Report: 2.png — Dr Agarwals Eye Hospital TN05BT5754](docs/screenshots/report_2_png.png)
+
+---
+
+### Report 3: `1.png` — ARENA ANIMATION / MH12NW8556
+
+| Inspection Attribute | Extracted Value |
+|:---------------------|:----------------|
+| **Image ID** | `3c617825-168a-4872-b5c6-2a7a1bac1868` |
+| **File Specs** | 1.30 MB · PNG (720 × 1280) |
+| **Processing Time** | 9.30s (Async Worker Pipeline) |
+| **Campaign Brand** | **ARENA ANIMATION** |
+| **License Plate** | **MH12NW8556** |
+| **Overall Quality Score** | **5 / 6 Checks Passed (83%)** |
+
+| Check Stage | Verification Status | Algorithmic Metric / Findings |
+|:------------|:-------------------:|:------------------------------|
+| **Blur Detection** | Passed | Laplacian StDev: `25.72` (Sharp vehicle texture) |
+| **Brightness Analysis** | Passed | Mean Luminance: `114.43` (Optimal outdoor daylight) |
+| **Duplicate Detection** | Passed | 64-bit dHash Hamming Distance: `64` (Unique submission) |
+| **OCR & Plate Validation** | Passed | **MH12NW8556** — 2-line auto-rickshaw plate localized |
+| **Dimension Validation** | Passed | 720 × 1280, Aspect Ratio: `0.56` (Compliant resolution) |
+| **Metadata Analysis** | Flagged | Camera EXIF headers stripped by messenger |
+
+![Inspection Report: 1.png — ARENA ANIMATION MH12NW8556](docs/screenshots/report_1_png.png)
+
+---
+
 ## 📡 API Reference
 
 ### Upload Vehicle Image
@@ -404,11 +486,7 @@ This project fulfills **all 3 bonus evaluation criteria**:
 | 🌱 **Database Seed** | `npm run db:seed` — populates initial vehicle records and analyzer history |
 | 🧪 **Test Suite** | `npm test` — automated unit & integration tests for all 6 analyzers |
 
+
 ---
 
-<div align="center">
-
-Built with TypeScript · Next.js · BullMQ · PostgreSQL · Redis · AWS Rekognition · Google Gemini
-
-</div>
-]]>
+*Built with TypeScript · Next.js · BullMQ · PostgreSQL · Redis · AWS Rekognition · Google Gemini*
