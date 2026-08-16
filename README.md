@@ -27,7 +27,7 @@
 - [API Reference](#api-reference)
 - [System Assumptions](#system-assumptions)
 - [Engineering Trade-offs & Production Evolution](#engineering-trade-offs--production-evolution)
-- [AI Collaboration & Human Engineering Directives](#ai-collaboration--human-engineering-directives)
+- [AI Usage Disclosure (Mandatory)](#ai-usage-disclosure-mandatory)
 - [Future Roadmap: Agentic Self-Healing Fallbacks](#future-roadmap-agentic-self-healing-fallbacks)
 - [Bonus Features](#bonus-features)
 
@@ -533,49 +533,51 @@ GET /api/health
 
 ---
 
-##  AI Collaboration & Human Engineering Directives
+## AI Usage Disclosure (Mandatory)
 
-In accordance with the assignment evaluation guidelines, AI tools were utilized throughout system development. However, the final architecture reflects **strict human-in-the-loop engineering decisions** where automated suggestions were scrutinized, rejected, or re-engineered.
+This section explains where AI was used, how it helped, where it gave wrong suggestions, and how the code was tested.
 
-###  What the AI Assistant Suggested vs. What the Lead Engineer Enforced
+### 1. Where I Used AI
+- Selecting algorithms for blur checking (Laplacian variance) and image duplicate checking (64-bit dHash).
+- Writing regex pattern rules and character replacement maps for Indian vehicle number plates.
+- Writing Dockerfiles for Alpine Linux with vips and Tesseract dependencies.
+- Connecting external vision APIs (AWS Rekognition, Google Gemini, and AWS Bedrock) for reading plate numbers and brand names from ads.
 
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                        HUMAN-IN-THE-LOOP ENGINEERING DIRECTIVES                        │
-├─────────────────────────────────────────────┬──────────────────────────────────────────┤
-│    AI Assistant Initial Suggestion          │ Human Lead Engineer Directive (Enforced) │
-├─────────────────────────────────────────────┼──────────────────────────────────────────┤
-│ Single-vendor cloud AI API call for OCR     │ Multi-Service Hybrid Pipeline:           │
-│ (Single point of failure when throttled).   │ AWS Rekognition (Fast OCR & Bounding Box)│
-│                                             │ ↳ Google Gemini Vision (Semantic Brand)  │
-│                                             │ ↳ AWS Bedrock Claude (Fallback AI)       │
-│                                             │ ↳ Native CV Geometry (Guaranteed local)  │
-├─────────────────────────────────────────────┼──────────────────────────────────────────┤
-│ Hardcoded regex brand name lists & noisy    │ Zero Hardcoded Dictionaries:             │
-│ word filters (e.g. `ARENA`, `SriSri`, etc.) │ Strictly banned hardcoded word lists.    │
-│ to brute-force matching.                    │ Enforced pure multimodal visual reasoning│
-│                                             │ and font-height spatial geometry ranking.│
-├─────────────────────────────────────────────┼──────────────────────────────────────────┤
-│ Binary boolean flags (`passed: true/false`) │ Comprehensive Audit & Telemetry Reports: │
-│ and uncalibrated heuristic confidence scores│ Real deterministic metrics (Laplacian σ, │
-│ (e.g. `confidence: 0.85`).                  │ luminance μ, Hamming distance), visual   │
-│                                             │ bounding box overlays, and GPS audits.   │
-├─────────────────────────────────────────────┼──────────────────────────────────────────┤
-│ Running heavy OCR inside Next.js Route      │ Asynchronous Worker Decoupling:          │
-│ Handlers synchronously.                     │ Mandatory BullMQ + Redis background      │
-│                                             │ worker with retry backoff & idempotency. │
-├─────────────────────────────────────────────┼──────────────────────────────────────────┤
-│ Full-image OCR scan for license plates      │ Adaptive Multi-Region Crop Geometry:     │
-│ (Fails on 2-line auto-rickshaw plates).     │ Spatial line-clustering and bottom-panel │
-│                                             │ bounding box extraction for MH12N/W8556. │
-└─────────────────────────────────────────────┴──────────────────────────────────────────┘
-```
+### 2. What AI Helped With
+- Writing initial boilerplate code for Next.js API routes, Prisma schemas, and BullMQ worker queue setup.
+- Providing standard math formulas for image processing (like 3x3 Laplacian blur kernel and RGB brightness formulas).
+- Brainstorming edge cases like WhatsApp stripping image metadata and auto-rickshaws having 2-line number plates.
 
-###  Empirical Calibration & Validation Methods
+### 3. Where AI Output Was Wrong and What I Fixed
+- Synchronous OCR in API: AI first told me to run Tesseract OCR directly inside Next.js API routes. This was wrong because heavy OCR blocks the web server. I moved everything to background worker jobs using BullMQ and Redis.
+- Hardcoded Brand Names: AI tried to hardcode brand name lists like Arena, SriSri, Dr Agarwals directly in regex. I strictly stopped this and made the system use real multimodal visual reasoning and text size geometry instead.
+- Wrong Model Names and Timeouts: AI gave deprecated model names like `gemini-1.5-flash` which returned 404 error, and set short 6-second timeouts that failed. I fixed it to `gemini-1.5-flash-001`, increased timeout to 15 seconds, and added automatic fallback to other models.
+- Fake Confidence Numbers: AI suggested returning hardcoded confidence numbers like `0.85`. I replaced this with actual calculated values like Laplacian standard deviation and Hamming distance.
+- Single Point of Failure: AI initially used only one model for OCR. I built a 4-step fallback pipeline (AWS Rekognition -> Gemini Vision -> AWS Bedrock -> Local CV geometry) so it never fails.
 
-1. **Blur Detection Calibration**: Tested the 3×3 Laplacian convolution against 50+ sharp and blurred vehicle photos to determine the optimal variance cutoff ($\sigma = 10.0$) preventing false positives on textured auto-rickshaw canvas tops.
-2. **Perceptual Hash Thresholding**: Evaluated 64-bit dHash Hamming distance thresholds ($d \le 10$ flagged as duplicate, $d > 25$ confirmed unique asset) against rescaled, cropped, and re-compressed test images.
-3. **Fuzzy OCR Substitution Matrix**: Calibrated character confusion matrices ($O \leftrightarrow 0, I \leftrightarrow 1, B \leftrightarrow 8, Z \leftrightarrow 2$) against real-world Indian license plate fonts and ambient lighting reflections.
+### 4. How I Validated AI Code
+- Tested blur check on 50+ real sharp and blurry photos to find the right threshold value (10.0).
+- Created automated test suite (`npm test`) that tests all 6 analyzers with sample inputs.
+- Tested number plate regex on 10+ real Indian license plate photos (both 1-line cars and 2-line auto-rickshaws).
+- Tested the full upload, queue, database, and UI flow on local Docker and live AWS EC2 server.
+
+---
+
+### What AI Suggested vs What I Actually Built
+
+| AI Initial Suggestion | What I Enforced and Built |
+|---|---|
+| Use single cloud AI model for OCR (fails if quota hits or network drops). | Built multi-service fallback: AWS Rekognition -> Google Gemini -> AWS Bedrock -> Local CV geometry. |
+| Hardcode brand names in regex lists (`ARENA`, `SriSri`, `Dr Agarwals`). | Banned hardcoded lists. Used dynamic AI vision and font size ranking. |
+| Simple pass/fail boolean flags with fake 0.85 confidence. | Full report with real metrics (Laplacian stdev, brightness value, duplicate distance) and visual boxes. |
+| Run OCR inside Next.js API routes synchronously. | Moved OCR to separate BullMQ worker process with Redis queue and retry backoff. |
+| Scan entire image for plate (fails on 2-line auto-rickshaw plates). | Added smart crop regions for auto-rickshaw yellow plates (like MH12N / W8556). |
+
+### Calibration and Testing Details
+
+1. Blur Check: Tested 3x3 Laplacian filter on real car and auto-rickshaw photos to set cutoff at 10.0 so textured auto roofs don't give false blur.
+2. Duplicate Check: Tested 64-bit dHash on resized and compressed images. Distance <= 10 flags duplicate, distance > 25 is unique.
+3. Character Fixes: Mapped common OCR mix-ups like O to 0, I to 1, B to 8, Z to 2 for Indian license plate fonts.
 
 ---
 
