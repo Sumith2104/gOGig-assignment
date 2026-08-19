@@ -517,8 +517,7 @@ GET /api/health
    - The vehicle fleet consists of standard MoRTH Indian vehicles (auto-rickshaws, cabs, logistics trucks) utilizing both **single-line horizontal plates** (e.g., `TN05BT5754`, `WB73E9248`) and **stacked two-line auto-rickshaw plates** (e.g., Line 1 `MH12N`, Line 2 `W8556` / `KR1145`).
    - Supports yellow commercial plates, white private plates, and green EV plates.
 3. **Cloud Provider SLA & Rate Limits**:
-   - External multimodal AI endpoints are subject to network latency, transient connectivity drops, and free-tier rate limits (HTTP 429). The system assumes zero-downtime resilience and must never throw unhandled exceptions or return blank values when an external vendor is throttled.
-
+   - External multimodal AI endpoints are subject to network latency, transient connectivity drops, and free-tier rate limits (HTTP 429). The systems assumes zero-downtime resilience and must never throw unhandled exceptions or return blank values when an external vendor is throttled.
 ---
 
 ##  Engineering Trade-offs & Production Evolution
